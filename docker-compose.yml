@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  # Databases
+  mysql:
+    image: mysql:8.0
+    container_name: soa_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/init-mysql.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - soa-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  mongodb:
+    image: mongo:7.0
+    container_name: soa_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - soa-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Microservices
+  stakeholders-service:
+    build:
+      context: ./stakeholders-service
+      dockerfile: Dockerfile
+    container_name: soa_stakeholders
+    environment:
+      - PORT=8081
+      - MYSQL_DSN=${MYSQL_USER}:${MYSQL_PASSWORD}@tcp(mysql:3306)/${MYSQL_DATABASE}?charset=utf8mb4&parseTime=True&loc=Local
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - soa-network
+    restart: unless-stopped
+
+  content-service:
+    build:
+      context: ./content-service
+      dockerfile: Dockerfile
+    container_name: soa_content
+    environment:
+      - PORT=8082
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE}?authSource=admin
+      - STAKEHOLDERS_SERVICE_URL=stakeholders-service:8081
+    ports:
+      - "8082:8082"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      stakeholders-service:
+        condition: service_started
+    networks:
+      - soa-network
+    restart: unless-stopped
+
+  commerce-service:
+    build:
+      context: ./commerce-service
+      dockerfile: Dockerfile
+    container_name: soa_commerce
+    environment:
+      - PORT=8083
+      - MYSQL_DSN=${MYSQL_USER}:${MYSQL_PASSWORD}@tcp(mysql:3306)/${MYSQL_DATABASE}?charset=utf8mb4&parseTime=True&loc=Local
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE}?authSource=admin
+      - STAKEHOLDERS_SERVICE_URL=stakeholders-service:8081
+      - CONTENT_SERVICE_URL=content-service:8082
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      stakeholders-service:
+        condition: service_started
+      content-service:
+        condition: service_started
+    networks:
+      - soa-network
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: soa_gateway
+    environment:
+      - PORT=8080
+      - STAKEHOLDERS_SERVICE_URL=stakeholders-service:8081
+      - CONTENT_SERVICE_URL=content-service:8082
+      - COMMERCE_SERVICE_URL=commerce-service:8083
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - stakeholders-service
+      - content-service
+      - commerce-service
+    networks:
+      - soa-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: soa_frontend
+    environment:
+      - API_BASE_URL=http://api-gateway:8080
+    ports:
+      - "4200:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - soa-network
+    restart: unless-stopped
+
+networks:
+  soa-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  mongodb_data:
