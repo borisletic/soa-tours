@@ -161,28 +161,6 @@ services:
       retries: 3
       start_period: 30s
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: soa_frontend
-    environment:
-      - API_BASE_URL=http://localhost:8080
-    ports:
-      - "4200:80"
-    depends_on:
-      api-gateway:
-        condition: service_healthy
-    networks:
-      - soa-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
 networks:
   soa-network:
     driver: bridge
