@@ -1,1 +1,161 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global Styles for Angular 20 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+}
+
+.container-fluid, .container {
+  padding-top: 20px;
+}
+
+/* Card Enhancements */
+.card {
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Button Enhancements */
+.btn {
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+/* Badge Styling */
+.badge {
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-weight: 500;
+}
+
+/* Alert Styling */
+.alert {
+  border: none;
+  border-radius: 10px;
+  padding: 15px 20px;
+}
+
+/* Navigation Styling */
+.navbar-brand {
+  font-size: 1.8rem;
+  font-weight: bold;
+}
+
+.nav-link {
+  transition: color 0.3s ease;
+  font-weight: 500;
+}
+
+.nav-link:hover {
+  color: #ffc107 !important;
+}
+
+/* Code Styling */
+pre {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 10px 0;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+code {
+  color: #e83e8c;
+  background: rgba(233, 236, 239, 0.5);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+/* Custom Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container-fluid {
+    padding: 10px;
+  }
+  
+  .card {
+    margin-bottom: 20px;
+  }
+  
+  .display-4 {
+    font-size: 2rem;
+  }
+}
+
+/* Loading Spinner */
+.spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Service Status Indicators */
+.service-online .card-body {
+  border-left: 4px solid #28a745;
+}
+
+.service-offline .card-body {
+  border-left: 4px solid #dc3545;
+}
+
+/* Glassmorphism Effect */
+.glass {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Angular 20 specific enhancements */
+app-root {
+  display: block;
+  min-height: 100vh;
+}
+
+/* Signal-based component animations */
+.signal-update {
+  transition: all 0.3s ease;
+}
+
+.signal-update.updating {
+  opacity: 0.7;
+  transform: scale(0.98);
+}
