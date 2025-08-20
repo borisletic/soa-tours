@@ -1,28 +1,38 @@
 import { Routes } from '@angular/router';
+import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { UsersComponent } from './components/users/users.component';
+import { RegisterComponent } from './components/register/register.component';
+import { LoginComponent } from './components/login/login.component';
+import { ProfileComponent } from './components/profile/profile.component';
 
 export const routes: Routes = [
-  {
-    path: '',
-    loadComponent: () => import('./components/dashboard/dashboard.component').then(m => m.DashboardComponent)
+  { 
+    path: '', 
+    component: DashboardComponent,
+    title: 'SOA Tours - Dashboard'
   },
-  {
-    path: 'users',
-    loadComponent: () => import('./components/users/users.component').then(m => m.UsersComponent)
+  { 
+    path: 'users', 
+    component: UsersComponent,
+    title: 'SOA Tours - Korisnici'
   },
-  {
-    path: 'blogs',
-    loadComponent: () => import('./components/blogs/blogs.component').then(m => m.BlogsComponent)
+  { 
+    path: 'register', 
+    component: RegisterComponent,
+    title: 'SOA Tours - Registracija'
   },
-  {
-    path: 'tours',
-    loadComponent: () => import('./components/tours/tours.component').then(m => m.ToursComponent)
+  { 
+    path: 'login', 
+    component: LoginComponent,
+    title: 'SOA Tours - Prijava'
   },
-  {
-    path: 'cart',
-    loadComponent: () => import('./components/cart/cart.component').then(m => m.CartComponent)
+  { 
+    path: 'profile/:id', 
+    component: ProfileComponent,
+    title: 'SOA Tours - Profil'
   },
-  {
-    path: '**',
-    redirectTo: ''
+  { 
+    path: '**', 
+    redirectTo: '' 
   }
 ];
