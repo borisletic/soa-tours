@@ -9,7 +9,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-soa_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-soa_password123}
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./scripts/init-mysql.sql:/docker-entrypoint-initdb.d/init.sql
@@ -63,12 +63,12 @@ services:
     networks:
       - soa-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    #healthcheck:
+     # test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
+      #interval: 30s
+      #timeout: 10s
+      #retries: 3
+      #start_period: 30s
 
   content-service:
     build:
@@ -85,8 +85,7 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
-      stakeholders-service:
-        condition: service_healthy
+      
     networks:
       - soa-network
     restart: unless-stopped
@@ -116,10 +115,7 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_healthy
-      stakeholders-service:
-        condition: service_healthy
-      content-service:
-        condition: service_healthy
+      
     networks:
       - soa-network
     restart: unless-stopped
@@ -144,13 +140,8 @@ services:
       - GIN_MODE=release
     ports:
       - "8080:8080"
-    depends_on:
-      stakeholders-service:
-        condition: service_healthy
-      content-service:
-        condition: service_healthy
-      commerce-service:
-        condition: service_healthy
+    
+      
     networks:
       - soa-network
     restart: unless-stopped

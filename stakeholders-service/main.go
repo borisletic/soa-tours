@@ -11,15 +11,13 @@ import (
 func main() {
     router := gin.Default()
 
-    // Health check
     router.GET("/health", func(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{
-            "status": "healthy",
+            "status":  "healthy",
             "service": "stakeholders-service",
         })
     })
 
-    // API routes (to be implemented)
     router.GET("/users", func(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{
             "message": "Users endpoint - under development",
@@ -32,5 +30,6 @@ func main() {
     }
 
     log.Printf("Stakeholders Service starting on port %s", port)
-    log.Fatal(router.Run(":" + port))
+    // Explicitly bind to 0.0.0.0 instead of default 127.0.0.1
+    log.Fatal(router.Run("0.0.0.0:" + port))
 }
