@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Docker and Docker Compose installed
-- Ports 3306, 27017, 8080-8083, 4200 available
+- Ports 3307, 27017, 8080-8083, 4200 available
 
 ## Starting the Application
 1. Clone the repository
