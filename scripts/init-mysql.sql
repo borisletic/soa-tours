@@ -118,6 +118,45 @@ CREATE TABLE purchase_tokens (
     UNIQUE KEY unique_user_tour_active (user_id, tour_id, is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Follows table - User following relationships
+CREATE TABLE follows (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    follower_id INT NOT NULL,
+    following_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Foreign key constraints
+    FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (following_id) REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Indexes for performance
+    INDEX idx_follower_id (follower_id),
+    INDEX idx_following_id (following_id),
+    INDEX idx_created_at (created_at),
+    
+    -- Prevent duplicate follows and self-follows
+    UNIQUE KEY unique_follow (follower_id, following_id),
+    CHECK (follower_id != following_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Blog comments table - Store comments from content service
+CREATE TABLE blog_comments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    blog_id VARCHAR(24) NOT NULL, -- MongoDB ObjectId from content service
+    user_id INT NOT NULL,
+    comment_text TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Foreign key constraint
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Indexes
+    INDEX idx_blog_id (blog_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Insert default admin user
 -- Password hash for 'admin123' using bcrypt
 INSERT INTO users (username, email, password_hash, role) VALUES 
@@ -147,6 +186,16 @@ INSERT INTO profiles (user_id, first_name, last_name, biography, motto) VALUES
 (3, 'Jane', 'Tourist', 'Adventure seeker and travel enthusiast', 'Life is an adventure waiting to happen');
 
 INSERT INTO shopping_carts (user_id) VALUES (3);
+
+-- Sample follow relationships
+INSERT INTO follows (follower_id, following_id) VALUES 
+(3, 2), -- tourist1 follows guide1
+(1, 2); -- admin follows guide1
+
+-- Show final table status including new tables
+SELECT 'Follow relationships created' as Status;
+SELECT TABLE_NAME, TABLE_ROWS FROM information_schema.TABLES 
+WHERE TABLE_SCHEMA = 'soa_tours' AND TABLE_NAME IN ('follows', 'blog_comments');
 
 -- Show final table status
 SELECT 'MySQL Database Initialization Completed' as Status;

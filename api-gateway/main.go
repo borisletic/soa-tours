@@ -31,6 +31,8 @@ func main() {
     router.Any("/stakeholders/*path", proxyHandler("stakeholders-service:8081"))
     router.Any("/content/*path", proxyHandler("content-service:8082"))
     router.Any("/commerce/*path", proxyHandler("commerce-service:8083"))
+    router.Any("/follow/*path", proxyHandler("stakeholders-service:8081"))
+    router.Any("/can-comment/*path", proxyHandler("stakeholders-service:8081"))
 
     port := os.Getenv("PORT")
     if port == "" {

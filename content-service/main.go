@@ -3,6 +3,9 @@ package main
 import (
     "context"
     "log"
+    "encoding/json"
+    "fmt"
+    "io"
     "net/http"
     "os"
     "strconv"
@@ -105,6 +108,7 @@ func main() {
 
     // Tours routes (placeholder for future implementation)
     router.GET("/tours", getToursPlaceholder)
+   
 
     port := os.Getenv("PORT")
     if port == "" {
@@ -412,6 +416,7 @@ func addComment(c *gin.Context) {
 
     var req struct {
         Text string `json:"text" binding:"required,min=1"`
+        AuthorID int `json:"author_id"` // Dodano - može biti opciono
     }
     if err := c.ShouldBindJSON(&req); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -426,15 +431,56 @@ func addComment(c *gin.Context) {
         }
     }
 
+    // NOVA LOGIKA: Prvo dobij blog da vidiš ko je autor
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    var blog Blog
+    err = blogsCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&blog)
+    if err != nil {
+        if err == mongo.ErrNoDocuments {
+            c.JSON(http.StatusNotFound, gin.H{"error": "Blog not found"})
+            return
+        }
+        log.Printf("Error finding blog: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+
+    // Koristi author_id iz zahteva ili iz bloga
+    authorID := blog.AuthorID
+    if req.AuthorID != 0 {
+        authorID = req.AuthorID
+    }
+
+    // KLJUČNA PROVERA: Pozovi stakeholders-service da proveri follow status
+    canComment, err := canUserComment(userID, authorID)
+    if err != nil {
+        log.Printf("Error checking follow status: %v", err)
+        // Ako nije moguće proveriti, odbaci zahtev iz bezbednosnih razloga
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "error": "Failed to verify follow status",
+            "details": err.Error(),
+        })
+        return
+    }
+
+    if !canComment {
+        c.JSON(http.StatusForbidden, gin.H{
+            "error": "You must follow the author to comment on their blog",
+            "author_id": authorID,
+            "message": "Follow the author first, then try commenting again",
+        })
+        return
+    }
+
+    // Follow provera prošla - dodaj komentar
     comment := Comment{
         UserID:    userID,
         Text:      req.Text,
         CreatedAt: time.Now(),
         UpdatedAt: time.Now(),
     }
-
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
 
     // Add comment to comments array
     _, err = blogsCollection.UpdateOne(
@@ -449,8 +495,9 @@ func addComment(c *gin.Context) {
     }
 
     c.JSON(http.StatusCreated, gin.H{
-        "message": "Comment added successfully",
+        "message": "Comment added successfully - follow check passed",
         "comment": comment,
+        "author_id": authorID,
     })
 }
 
@@ -460,3 +507,47 @@ func getToursPlaceholder(c *gin.Context) {
         "tours": []gin.H{},
     })
 }
+
+// Proveri da li korisnik može da komentariše blog
+func canUserComment(userID int, authorID int) (bool, error) {
+    stakeholdersURL := os.Getenv("STAKEHOLDERS_SERVICE_URL")
+    if stakeholdersURL == "" {
+        stakeholdersURL = "stakeholders-service:8081"
+    }
+
+    url := fmt.Sprintf("http://%s/can-comment/%d", stakeholdersURL, authorID)
+    
+    // Kreiranje HTTP zahteva sa mock user_id header-om
+    req, err := http.NewRequest("GET", url, nil)
+    if err != nil {
+        return false, err
+    }
+    
+    // Dodaj header da simulira authenticated user
+    req.Header.Set("X-User-ID", fmt.Sprintf("%d", userID))
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        return false, err
+    }
+    defer resp.Body.Close()
+
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return false, err
+    }
+
+    var result map[string]interface{}
+    if err := json.Unmarshal(body, &result); err != nil {
+        return false, err
+    }
+
+    canComment, ok := result["can_comment"].(bool)
+    if !ok {
+        return false, fmt.Errorf("unexpected response format")
+    }
+
+    return canComment, nil
+}
+

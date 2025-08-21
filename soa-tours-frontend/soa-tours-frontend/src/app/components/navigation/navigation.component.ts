@@ -41,10 +41,22 @@ import { ApiService } from '../../services/api.service';
             </li>
             <li class="nav-item">
             <a class="nav-link" routerLink="/blogs" routerLinkActive="active">
-                <i class="fas fa-blog me-1"></i>
-                Blogovi
+              <i class="fas fa-blog me-1"></i>
+              Blogovi
             </a>
-            </li>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/follow" routerLinkActive="active">
+              <i class="fas fa-users me-1"></i>
+              Follow System
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/enhanced-blogs" routerLinkActive="active">
+              <i class="fas fa-blog me-1"></i>
+              Enhanced Blogs
+            </a>
+          </li>
           </ul>
           
           <ul class="navbar-nav">

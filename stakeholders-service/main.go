@@ -66,7 +66,41 @@ type UpdateProfileRequest struct {
     Motto        string `json:"motto"`
 }
 
+// NOVE STRUKTURE ZA FOLLOW FUNKCIONALNOST
+type Follow struct {
+    ID          int       `json:"id" db:"id"`
+    FollowerID  int       `json:"follower_id" db:"follower_id"`
+    FollowingID int       `json:"following_id" db:"following_id"`
+    CreatedAt   time.Time `json:"created_at" db:"created_at"`
+}
+
+type FollowWithUser struct {
+    Follow
+    Username  string `json:"username"`
+    FirstName string `json:"first_name"`
+    LastName  string `json:"last_name"`
+}
+
 var db *sql.DB
+
+// Mock auth middleware - za testiranje
+func authMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        // Za testiranje, koristimo mock user_id
+        // U realnoj aplikaciji ovde bi se parsirao JWT token
+        userID := c.GetHeader("X-User-ID")
+        if userID == "" {
+            userID = "1" // default mock user
+        }
+        
+        if id, err := strconv.Atoi(userID); err == nil {
+            c.Set("user_id", id)
+        } else {
+            c.Set("user_id", 1)
+        }
+        c.Next()
+    }
+}
 
 func main() {
     var err error
@@ -95,7 +129,7 @@ func main() {
     config := cors.DefaultConfig()
     config.AllowOrigins = []string{"http://localhost:4200", "http://127.0.0.1:4200"}
     config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "X-User-ID"}
     router.Use(cors.New(config))
 
     // Health check
@@ -113,6 +147,14 @@ func main() {
 
     // Profile routes
     router.GET("/profiles", getProfiles)
+
+    // NOVE FOLLOW RUTE
+    router.POST("/follow/:user_id", authMiddleware(), followUser)
+    router.DELETE("/follow/:user_id", authMiddleware(), unfollowUser)
+    router.GET("/follow/check/:user_id", authMiddleware(), checkFollowing)
+    router.GET("/following", authMiddleware(), getFollowing)
+    router.GET("/followers", authMiddleware(), getFollowers)
+    router.GET("/can-comment/:author_id", authMiddleware(), canComment)
 
     port := os.Getenv("PORT")
     if port == "" {
@@ -490,5 +532,222 @@ func getProfiles(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{
         "profiles": profiles,
         "count":    len(profiles),
+    })
+}
+
+// ============ NOVE FOLLOW FUNKCIONALNOSTI ============
+
+// POST /follow/:user_id
+func followUser(c *gin.Context) {
+    userID := c.GetInt("user_id")
+    targetUserIDStr := c.Param("user_id")
+    targetUserID, err := strconv.Atoi(targetUserIDStr)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+        return
+    }
+
+    if userID == targetUserID {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot follow yourself"})
+        return
+    }
+
+    // Proveri da li target user postoji
+    var count int
+    err = db.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", targetUserID).Scan(&count)
+    if err != nil || count == 0 {
+        c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+        return
+    }
+
+    query := "INSERT INTO follows (follower_id, following_id) VALUES (?, ?)"
+    _, err = db.Exec(query, userID, targetUserID)
+    if err != nil {
+        c.JSON(http.StatusConflict, gin.H{"error": "Already following this user"})
+        return
+    }
+
+    c.JSON(http.StatusCreated, gin.H{
+        "message": "Successfully followed user",
+        "following_id": targetUserID,
+    })
+}
+
+// DELETE /follow/:user_id
+func unfollowUser(c *gin.Context) {
+    userID := c.GetInt("user_id")
+    targetUserIDStr := c.Param("user_id")
+    targetUserID, err := strconv.Atoi(targetUserIDStr)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+        return
+    }
+
+    query := "DELETE FROM follows WHERE follower_id = ? AND following_id = ?"
+    result, err := db.Exec(query, userID, targetUserID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unfollow user"})
+        return
+    }
+
+    rowsAffected, _ := result.RowsAffected()
+    if rowsAffected == 0 {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Not following this user"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "message": "Successfully unfollowed user",
+        "unfollowed_id": targetUserID,
+    })
+}
+
+// GET /follow/check/:user_id
+func checkFollowing(c *gin.Context) {
+    userID := c.GetInt("user_id")
+    targetUserIDStr := c.Param("user_id")
+    targetUserID, err := strconv.Atoi(targetUserIDStr)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+        return
+    }
+
+    var count int
+    query := "SELECT COUNT(*) FROM follows WHERE follower_id = ? AND following_id = ?"
+    err = db.QueryRow(query, userID, targetUserID).Scan(&count)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "is_following": count > 0,
+        "target_user_id": targetUserID,
+    })
+}
+
+// GET /following
+func getFollowing(c *gin.Context) {
+    userID := c.GetInt("user_id")
+
+    query := `SELECT f.id, f.follower_id, f.following_id, f.created_at, 
+                     u.username, p.first_name, p.last_name
+              FROM follows f 
+              JOIN users u ON f.following_id = u.id 
+              LEFT JOIN profiles p ON u.id = p.user_id
+              WHERE f.follower_id = ?
+              ORDER BY f.created_at DESC`
+    
+    rows, err := db.Query(query, userID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+    defer rows.Close()
+
+    var following []FollowWithUser
+    for rows.Next() {
+        var f FollowWithUser
+        var firstName, lastName sql.NullString
+        
+        err := rows.Scan(&f.ID, &f.FollowerID, &f.FollowingID, &f.CreatedAt, 
+                        &f.Username, &firstName, &lastName)
+        if err != nil {
+            log.Printf("Error scanning follow: %v", err)
+            continue
+        }
+
+        f.FirstName = firstName.String
+        f.LastName = lastName.String
+        following = append(following, f)
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "following": following,
+        "count": len(following),
+    })
+}
+
+// GET /followers
+func getFollowers(c *gin.Context) {
+    userID := c.GetInt("user_id")
+
+    query := `SELECT f.id, f.follower_id, f.following_id, f.created_at, 
+                     u.username, p.first_name, p.last_name
+              FROM follows f 
+              JOIN users u ON f.follower_id = u.id 
+              LEFT JOIN profiles p ON u.id = p.user_id
+              WHERE f.following_id = ?
+              ORDER BY f.created_at DESC`
+    
+    rows, err := db.Query(query, userID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+    defer rows.Close()
+
+    var followers []FollowWithUser
+    for rows.Next() {
+        var f FollowWithUser
+        var firstName, lastName sql.NullString
+        
+        err := rows.Scan(&f.ID, &f.FollowerID, &f.FollowingID, &f.CreatedAt, 
+                        &f.Username, &firstName, &lastName)
+        if err != nil {
+            log.Printf("Error scanning follow: %v", err)
+            continue
+        }
+
+        f.FirstName = firstName.String
+        f.LastName = lastName.String
+        followers = append(followers, f)
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "followers": followers,
+        "count": len(followers),
+    })
+}
+
+// GET /can-comment/:author_id - ključna funkcija za blog komentare
+func canComment(c *gin.Context) {
+    userID := c.GetInt("user_id")
+    authorIDStr := c.Param("author_id")
+    authorID, err := strconv.Atoi(authorIDStr)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid author ID"})
+        return
+    }
+
+    // Ako je korisnik autor bloga, može da komentariše
+    if userID == authorID {
+        c.JSON(http.StatusOK, gin.H{
+            "can_comment": true,
+            "reason": "own_blog",
+            "author_id": authorID,
+        })
+        return
+    }
+
+    // Proveri da li prati autora
+    var count int
+    query := "SELECT COUNT(*) FROM follows WHERE follower_id = ? AND following_id = ?"
+    err = db.QueryRow(query, userID, authorID).Scan(&count)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+
+    canComment := count > 0
+    reason := "not_following"
+    if canComment {
+        reason = "following_author"
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "can_comment": canComment,
+        "reason": reason,
+        "author_id": authorID,
     })
 }

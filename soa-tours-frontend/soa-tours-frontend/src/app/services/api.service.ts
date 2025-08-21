@@ -107,6 +107,43 @@ export interface UpdateBlogRequest {
   images?: string[];
 }
 
+export interface FollowResponse {
+  message: string;
+  following_id?: number;
+  unfollowed_id?: number;
+}
+
+export interface FollowCheckResponse {
+  is_following: boolean;
+  target_user_id: number;
+}
+
+export interface FollowWithUser {
+  id: number;
+  follower_id: number;
+  following_id: number;
+  created_at: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface FollowingResponse {
+  following: FollowWithUser[];
+  count: number;
+}
+
+export interface FollowersResponse {
+  followers: FollowWithUser[];
+  count: number;
+}
+
+export interface CanCommentResponse {
+  can_comment: boolean;
+  reason: string;
+  author_id: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -207,8 +244,12 @@ export class ApiService {
   }
 
   // Blog API calls
-  getBlogs(page: number = 1, limit: number = 10): Observable<{blogs: Blog[], pagination: any}> {
-    return this.http.get<{blogs: Blog[], pagination: any}>(`${this.CONTENT_API}/blogs?page=${page}&limit=${limit}`);
+  getBlogs(page: number = 1, limit: number = 10, userId?: number): Observable<{blogs: Blog[], pagination: any}> {
+    const currentUserId = userId || this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.get<{blogs: Blog[], pagination: any}>(`${this.CONTENT_API}/blogs?page=${page}&limit=${limit}`, { headers });
   }
 
   getBlogById(id: string): Observable<{blog: Blog}> {
@@ -241,23 +282,26 @@ export class ApiService {
     return this.http.delete(`${this.CONTENT_API}/blogs/${id}`, { headers });
   }
 
-  likeBlog(id: string, userId: number): Observable<any> {
-    const headers = new HttpHeaders({ 'X-User-ID': userId.toString() });
+  likeBlog(id: string, userId?: number): Observable<any> {
+    const currentUserId = userId || this.getCurrentUserId();
+    const headers = new HttpHeaders({ 'X-User-ID': currentUserId.toString() });
     return this.http.post(`${this.CONTENT_API}/blogs/${id}/like`, {}, { headers });
   }
 
-  unlikeBlog(id: string, userId: number): Observable<any> {
-    const headers = new HttpHeaders({ 'X-User-ID': userId.toString() });
+  unlikeBlog(id: string, userId?: number): Observable<any> {
+    const currentUserId = userId || this.getCurrentUserId();
+    const headers = new HttpHeaders({ 'X-User-ID': currentUserId.toString() });
     return this.http.delete(`${this.CONTENT_API}/blogs/${id}/like`, { headers });
   }
 
-  addComment(blogId: string, text: string, userId: number): Observable<any> {
-    const headers = new HttpHeaders({ 
-      'Content-Type': 'application/json',
-      'X-User-ID': userId.toString() 
-    });
-    return this.http.post(`${this.CONTENT_API}/blogs/${blogId}/comments`, { text }, { headers });
-  }
+  addComment(blogId: string, text: string, userId?: number): Observable<any> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({ 
+    'Content-Type': 'application/json',
+    'X-User-ID': currentUserId.toString() 
+  });
+  return this.http.post(`${this.CONTENT_API}/blogs/${blogId}/comments`, { text }, { headers });
+}
 
   // Tours API calls
   getTours(): Observable<any> {
@@ -340,5 +384,88 @@ export class ApiService {
 
   logout(): void {
     localStorage.removeItem('currentUser');
+  }
+
+  // Follow functionality
+  followUser(userId: number, currentUserId: number = 1): Observable<FollowResponse> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.post<FollowResponse>(`${this.STAKEHOLDERS_API}/follow/${userId}`, {}, { headers });
+  }
+
+  unfollowUser(userId: number, currentUserId: number = 1): Observable<FollowResponse> {
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.delete<FollowResponse>(`${this.STAKEHOLDERS_API}/follow/${userId}`, { headers });
+  }
+
+  checkFollowing(userId: number, currentUserId: number = 1): Observable<FollowCheckResponse> {
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.get<FollowCheckResponse>(`${this.STAKEHOLDERS_API}/follow/check/${userId}`, { headers });
+  }
+
+  getFollowing(currentUserId: number = 1): Observable<FollowingResponse> {
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.get<FollowingResponse>(`${this.STAKEHOLDERS_API}/following`, { headers });
+  }
+
+  getFollowers(currentUserId: number = 1): Observable<FollowersResponse> {
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.get<FollowersResponse>(`${this.STAKEHOLDERS_API}/followers`, { headers });
+  }
+
+  canComment(authorId: number, currentUserId: number = 1): Observable<CanCommentResponse> {
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.get<CanCommentResponse>(`${this.STAKEHOLDERS_API}/can-comment/${authorId}`, { headers });
+  }
+
+  // Enhanced blog functionality with follow checking
+  getRealBlogs(currentUserId: number = 1): Observable<{blogs: Blog[], pagination: any}> {
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.get<{blogs: Blog[], pagination: any}>(`${this.CONTENT_API}/blogs`, { headers });
+  }
+
+  addCommentWithFollowCheck(blogId: string, text: string, currentUserId: number = 1): Observable<any> {
+    const headers = new HttpHeaders({ 
+      'Content-Type': 'application/json',
+      'X-User-ID': currentUserId.toString() 
+    });
+    return this.http.post(`${this.CONTENT_API}/blogs/${blogId}/comments`, { text }, { headers });
+  }
+
+  // Utility methods for follow system
+  getCurrentUserId(): number {
+    const user = this.getCurrentUser();
+    return user?.id || 1; // Fallback to user ID 1 for testing
+  }
+
+  isFollowing(userId: number, followingList: number[]): boolean {
+    return followingList.includes(userId);
+  }
+
+  canUserComment(authorId: number, currentUserId?: number, followingList?: number[]): boolean {
+    const userId = currentUserId || this.getCurrentUserId();
+    const following = followingList || [];
+    
+    // User can always comment on their own blog
+    if (userId === authorId) {
+      return true;
+    }
+    
+    // User can comment if they follow the author
+    return following.includes(authorId);
   }
 }

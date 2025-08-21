@@ -6,6 +6,8 @@ import { LoginComponent } from './components/login/login.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { BlogsListComponent } from './components/blogs-list/blogs-list.component';
 import { CreateBlogComponent } from './components/create-blog/create-blog.component';
+import { EnhancedBlogsComponent } from './components/enhanced-blogs/enhanced-blogs.component';
+import { FollowComponent } from './components/follow/follow.component';
 
 export const routes: Routes = [
   { 
@@ -43,6 +45,18 @@ export const routes: Routes = [
     component: CreateBlogComponent,
     title: 'SOA Tours - Kreiraj blog'
   },
+  // PREMESTITE OVE RUTE IZNAD WILDCARD RUTE:
+  { 
+    path: 'follow', 
+    component: FollowComponent,
+    title: 'SOA Tours - Follow System'
+  },
+  { 
+    path: 'enhanced-blogs', 
+    component: EnhancedBlogsComponent,
+    title: 'SOA Tours - Enhanced Blogs'
+  },
+  // WILDCARD RUTA MORA BITI POSLEDNJA:
   { 
     path: '**', 
     redirectTo: '' 
