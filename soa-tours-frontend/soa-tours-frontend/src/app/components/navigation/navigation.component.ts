@@ -39,6 +39,12 @@ import { ApiService } from '../../services/api.service';
                 Korisnici
               </a>
             </li>
+            <li class="nav-item">
+            <a class="nav-link" routerLink="/blogs" routerLinkActive="active">
+                <i class="fas fa-blog me-1"></i>
+                Blogovi
+            </a>
+            </li>
           </ul>
           
           <ul class="navbar-nav">

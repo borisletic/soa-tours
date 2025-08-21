@@ -76,6 +76,37 @@ export interface UpdateProfileRequest {
   motto?: string;
 }
 
+export interface Blog {
+  id: string;
+  title: string;
+  description: string;
+  author_id: number;
+  images: string[];
+  likes: number[];
+  comments: Comment[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Comment {
+  user_id: number;
+  text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateBlogRequest {
+  title: string;
+  description: string;
+  images?: string[];
+}
+
+export interface UpdateBlogRequest {
+  title?: string;
+  description?: string;
+  images?: string[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -175,10 +206,60 @@ export class ApiService {
     return this.http.get(`${this.CONTENT_API}/health`);
   }
 
-  getBlogs(): Observable<any> {
-    return this.http.get(`${this.CONTENT_API}/blogs`);
+  // Blog API calls
+  getBlogs(page: number = 1, limit: number = 10): Observable<{blogs: Blog[], pagination: any}> {
+    return this.http.get<{blogs: Blog[], pagination: any}>(`${this.CONTENT_API}/blogs?page=${page}&limit=${limit}`);
   }
 
+  getBlogById(id: string): Observable<{blog: Blog}> {
+    return this.http.get<{blog: Blog}>(`${this.CONTENT_API}/blogs/${id}`);
+  }
+
+  createBlog(data: CreateBlogRequest, userId?: number): Observable<any> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      ...(userId && { 'X-User-ID': userId.toString() })
+    });
+    
+    return this.http.post(`${this.CONTENT_API}/blogs`, data, { headers });
+  }
+
+  updateBlog(id: string, data: UpdateBlogRequest, userId?: number): Observable<any> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      ...(userId && { 'X-User-ID': userId.toString() })
+    });
+    
+    return this.http.put(`${this.CONTENT_API}/blogs/${id}`, data, { headers });
+  }
+
+  deleteBlog(id: string, userId?: number): Observable<any> {
+    const headers = new HttpHeaders({
+      ...(userId && { 'X-User-ID': userId.toString() })
+    });
+    
+    return this.http.delete(`${this.CONTENT_API}/blogs/${id}`, { headers });
+  }
+
+  likeBlog(id: string, userId: number): Observable<any> {
+    const headers = new HttpHeaders({ 'X-User-ID': userId.toString() });
+    return this.http.post(`${this.CONTENT_API}/blogs/${id}/like`, {}, { headers });
+  }
+
+  unlikeBlog(id: string, userId: number): Observable<any> {
+    const headers = new HttpHeaders({ 'X-User-ID': userId.toString() });
+    return this.http.delete(`${this.CONTENT_API}/blogs/${id}/like`, { headers });
+  }
+
+  addComment(blogId: string, text: string, userId: number): Observable<any> {
+    const headers = new HttpHeaders({ 
+      'Content-Type': 'application/json',
+      'X-User-ID': userId.toString() 
+    });
+    return this.http.post(`${this.CONTENT_API}/blogs/${blogId}/comments`, { text }, { headers });
+  }
+
+  // Tours API calls
   getTours(): Observable<any> {
     return this.http.get(`${this.CONTENT_API}/tours`);
   }
