@@ -17,6 +17,8 @@ import (
     "go.mongodb.org/mongo-driver/mongo/options"
     "go.mongodb.org/mongo-driver/bson"
     "go.mongodb.org/mongo-driver/bson/primitive"
+    "content-service/handlers"
+    
 )
 
 type Blog struct {
@@ -53,6 +55,7 @@ type UpdateBlogRequest struct {
 var (
     mongoClient *mongo.Client
     blogsCollection *mongo.Collection
+    db *mongo.Database  // Add this line
 )
 
 func main() {
@@ -79,8 +82,8 @@ func main() {
     log.Println("Connected to MongoDB")
     
     // Get collections
-    database := mongoClient.Database("soa_tours_content")
-    blogsCollection = database.Collection("blogs")
+    db := mongoClient.Database("soa_tours_content")
+    blogsCollection = db.Collection("blogs")
 
     router := gin.Default()
 
@@ -106,8 +109,21 @@ func main() {
     router.DELETE("/blogs/:id/like", unlikeBlog)
     router.POST("/blogs/:id/comments", addComment)
 
+    tourHandler := handlers.NewTourHandler(db)
+
+    // Tour rute
+    router.GET("/tours", tourHandler.GetTours)
+    router.GET("/tours/:id", tourHandler.GetTourByID) 
+    router.POST("/tours", AuthMiddleware(), tourHandler.CreateTour)
+    router.PUT("/tours/:id", AuthMiddleware(), tourHandler.UpdateTour)
+
+    // Keypoint rute
+    router.POST("/tours/:id/keypoints", AuthMiddleware(), tourHandler.AddKeypoint)
+    router.PUT("/tours/:id/keypoints/:order", AuthMiddleware(), tourHandler.UpdateKeypoint)
+    router.DELETE("/tours/:id/keypoints/:order", AuthMiddleware(), tourHandler.RemoveKeypoint)
+
     // Tours routes (placeholder for future implementation)
-    router.GET("/tours", getToursPlaceholder)
+    //router.GET("/tours", getToursPlaceholder)
    
 
     port := os.Getenv("PORT")
@@ -117,6 +133,18 @@ func main() {
 
     log.Printf("Content Service starting on port %s", port)
     log.Fatal(router.Run("0.0.0.0:" + port))
+}
+
+func AuthMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        userID := c.GetHeader("X-User-ID")
+        if userID == "" {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+            c.Abort()
+            return
+        }
+        c.Next()
+    }
 }
 
 func healthCheck(c *gin.Context) {

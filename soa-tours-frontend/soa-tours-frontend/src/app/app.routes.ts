@@ -8,6 +8,8 @@ import { BlogsListComponent } from './components/blogs-list/blogs-list.component
 import { CreateBlogComponent } from './components/create-blog/create-blog.component';
 import { EnhancedBlogsComponent } from './components/enhanced-blogs/enhanced-blogs.component';
 import { FollowComponent } from './components/follow/follow.component';
+import { MyToursComponent } from './components/my-tours/my-tours.component';
+import { CreateTourComponent } from './components/create-tour/create-tour.component';
 
 export const routes: Routes = [
   { 
@@ -56,6 +58,8 @@ export const routes: Routes = [
     component: EnhancedBlogsComponent,
     title: 'SOA Tours - Enhanced Blogs'
   },
+  { path: 'create-tour', component: CreateTourComponent, title: 'Create Tour' },
+  { path: 'my-tours', component: MyToursComponent, title: 'My Tours' },
   // WILDCARD RUTA MORA BITI POSLEDNJA:
   { 
     path: '**', 

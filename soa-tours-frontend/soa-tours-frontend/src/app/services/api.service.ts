@@ -144,6 +144,33 @@ export interface CanCommentResponse {
   author_id: number;
 }
 
+// Tour interfaces
+export interface CreateTourRequest {
+  name: string;
+  description: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  tags: string[];
+}
+
+export interface UpdateTourRequest {
+  name?: string;
+  description?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  price?: number;
+  distance_km?: number;
+  tags?: string[];
+  status?: 'draft' | 'published' | 'archived';
+}
+
+export interface AddKeypointRequest {
+  name: string;
+  description: string;
+  latitude: number;
+  longitude: number;
+  images: string[];
+}
+
+
 @Injectable({
   providedIn: 'root'
 })
@@ -301,12 +328,11 @@ export class ApiService {
     'X-User-ID': currentUserId.toString() 
   });
   return this.http.post(`${this.CONTENT_API}/blogs/${blogId}/comments`, { text }, { headers });
+
+  
 }
 
-  // Tours API calls
-  getTours(): Observable<any> {
-    return this.http.get(`${this.CONTENT_API}/tours`);
-  }
+ 
 
   // Commerce API calls
   getCommerceHealth(): Observable<any> {
@@ -316,6 +342,57 @@ export class ApiService {
   getCart(): Observable<any> {
     return this.http.get(`${this.COMMERCE_API}/cart`);
   }
+
+  // Tour methods
+createTour(data: CreateTourRequest, userId?: number): Observable<any> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'Content-Type': 'application/json',
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.post(`${this.CONTENT_API}/tours`, data, { headers });
+}
+
+getTours(authorId?: number): Observable<any> {
+  let url = `${this.CONTENT_API}/tours`;
+  if (authorId) {
+    url += `?author_id=${authorId}`;
+  }
+  const headers = new HttpHeaders({
+    'X-User-ID': (authorId || this.getCurrentUserId()).toString()
+  });
+  return this.http.get(url, { headers });
+}
+
+getTourById(id: string): Observable<any> {
+  return this.http.get(`${this.CONTENT_API}/tours/${id}`);
+}
+
+updateTour(id: string, data: UpdateTourRequest, userId?: number): Observable<any> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'Content-Type': 'application/json',
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.put(`${this.CONTENT_API}/tours/${id}`, data, { headers });
+}
+
+addKeypoint(tourId: string, data: AddKeypointRequest, userId?: number): Observable<any> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'Content-Type': 'application/json',
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.post(`${this.CONTENT_API}/tours/${tourId}/keypoints`, data, { headers });
+}
+
+removeKeypoint(tourId: string, order: number, userId?: number): Observable<any> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.delete(`${this.CONTENT_API}/tours/${tourId}/keypoints/${order}`, { headers });
+}
 
   // Test all endpoints
   testAllEndpoints(): Observable<any[]> {

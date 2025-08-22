@@ -57,6 +57,18 @@ import { ApiService } from '../../services/api.service';
               Enhanced Blogs
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/create-tour" routerLinkActive="active">
+              <i class="fas fa-plus me-1"></i>
+              Create Tour
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/my-tours" routerLinkActive="active">
+              <i class="fas fa-route me-1"></i>
+              My Tours
+            </a>
+          </li>
           </ul>
           
           <ul class="navbar-nav">
