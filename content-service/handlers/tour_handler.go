@@ -6,12 +6,12 @@ import (
     "strconv"
     "time"
     "errors"
-
     "content-service/models"
     "github.com/gin-gonic/gin"
     "go.mongodb.org/mongo-driver/bson"
     "go.mongodb.org/mongo-driver/bson/primitive"
     "go.mongodb.org/mongo-driver/mongo"
+    "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type TourHandler struct {
@@ -592,28 +592,53 @@ func (h *TourHandler) AddTransportTime(c *gin.Context) {
         return
     }
 
-    // Add or update transport time
+    // Create the new transport time
     transportTime := models.TransportTime{
         TransportType:   req.TransportType,
         DurationMinutes: req.DurationMinutes,
     }
 
-    // Remove existing transport time for this type and add new one
+    // ✅ FIX 1: Initialize transport_times field if it doesn't exist
     _, err = collection.UpdateOne(
         context.TODO(),
         bson.M{"_id": objectID},
         bson.M{
-            "$pull": bson.M{"transport_times": bson.M{"transport_type": req.TransportType}},
+            "$setOnInsert": bson.M{"transport_times": []models.TransportTime{}},
         },
+        options.Update().SetUpsert(false),
     )
+
+    // ✅ FIX 2: Use $set instead of separate $pull and $push operations
+    // This approach removes any existing transport time of the same type and adds the new one
+    pipeline := []bson.M{
+        {
+            "$set": bson.M{
+                "transport_times": bson.M{
+                    "$concatArrays": []interface{}{
+                        // Filter out existing transport times of the same type
+                        bson.M{
+                            "$filter": bson.M{
+                                "input": bson.M{
+                                    "$ifNull": []interface{}{"$transport_times", []interface{}{}},
+                                },
+                                "cond": bson.M{
+                                    "$ne": []interface{}{"$$this.transport_type", req.TransportType},
+                                },
+                            },
+                        },
+                        // Add the new transport time
+                        []models.TransportTime{transportTime},
+                    },
+                },
+                "updated_at": time.Now(),
+            },
+        },
+    }
 
     _, err = collection.UpdateOne(
         context.TODO(),
         bson.M{"_id": objectID},
-        bson.M{
-            "$push": bson.M{"transport_times": transportTime},
-            "$set": bson.M{"updated_at": time.Now()},
-        },
+        pipeline,
     )
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add transport time"})
