@@ -244,6 +244,89 @@ export interface TransportTime {
   duration_minutes: number;
 }
 
+export interface ShoppingCart {
+  id: number;
+  user_id: number;
+  total_price: number;
+  created_at: Date;
+  updated_at: Date;
+  items: CartItem[];
+}
+
+export interface CartItem {
+  id: number;
+  cart_id: number;
+  tour_id: string;
+  tour_name: string;
+  price: number;
+  created_at: Date;
+}
+
+export interface PurchaseToken {
+  id: number;
+  user_id: number;
+  tour_id: string;
+  token: string;
+  purchased_at: Date;
+  expires_at?: Date;
+  is_active: boolean;
+}
+
+export interface AddToCartRequest {
+  tour_id: string;
+  tour_name: string;
+  price: number;
+}
+
+export interface CheckoutResponse {
+  message: string;
+  tokens: PurchaseToken[];
+  total: number;
+}
+
+export interface TourPurchaseInfo {
+  tour_id: string;
+  is_purchased: boolean;
+  token?: string;
+}
+
+export interface Tour {
+  id: string;
+  name: string;
+  description: string;
+  author_id: number;
+  status: 'draft' | 'published' | 'archived';
+  difficulty: 'easy' | 'medium' | 'hard';
+  price: number;
+  distance_km: number;
+  tags: string[];
+  keypoints: Keypoint[];
+  transport_times: TransportTime[];
+  reviews: Review[];
+  created_at: Date;
+  updated_at: Date;
+  published_at?: Date;
+  archived_at?: Date;
+}
+
+export interface Keypoint {
+  name: string;
+  description: string;
+  latitude: number;
+  longitude: number;
+  images: string[];
+  order: number;
+}
+
+export interface Review {
+  user_id: number;
+  rating: number;
+  comment: string;
+  visit_date: Date;
+  created_at: Date;
+  images: string[];
+}
+
 
 @Injectable({
   providedIn: 'root'
@@ -413,9 +496,7 @@ export class ApiService {
     return this.http.get(`${this.COMMERCE_API}/health`);
   }
 
-  getCart(): Observable<any> {
-    return this.http.get(`${this.COMMERCE_API}/cart`);
-  }
+ 
 
   // Tour methods
 createTour(data: CreateTourRequest, userId?: number): Observable<any> {
@@ -758,4 +839,54 @@ removeTransportTime(tourId: string, transportType: string, userId?: number): Obs
     });
     return this.http.delete(`${this.CONTENT_API}/tours/${tourId}/transport-times/${transportType}`, { headers });
   }
+
+getCart(userId?: number): Observable<{cart: ShoppingCart, message: string}> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.get<{cart: ShoppingCart, message: string}>(`${this.COMMERCE_API}/cart`, { headers });
+}
+
+addToCart(tourData: AddToCartRequest, userId?: number): Observable<{message: string}> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'Content-Type': 'application/json',
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.post<{message: string}>(`${this.COMMERCE_API}/cart/add`, tourData, { headers });
+}
+
+removeFromCart(tourId: string, userId?: number): Observable<{message: string}> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.delete<{message: string}>(`${this.COMMERCE_API}/cart/remove/${tourId}`, { headers });
+}
+
+checkout(userId?: number): Observable<CheckoutResponse> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'Content-Type': 'application/json',
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.post<CheckoutResponse>(`${this.COMMERCE_API}/checkout`, {}, { headers });
+}
+
+getPurchases(userId?: number): Observable<{purchases: PurchaseToken[], count: number}> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.get<{purchases: PurchaseToken[], count: number}>(`${this.COMMERCE_API}/purchases`, { headers });
+}
+
+checkTourPurchase(tourId: string, userId?: number): Observable<TourPurchaseInfo> {
+  const currentUserId = userId || this.getCurrentUserId();
+  const headers = new HttpHeaders({
+    'X-User-ID': currentUserId.toString()
+  });
+  return this.http.get<TourPurchaseInfo>(`${this.COMMERCE_API}/purchase/check/${tourId}`, { headers });
+}
 }

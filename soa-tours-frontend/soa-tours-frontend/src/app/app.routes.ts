@@ -13,6 +13,10 @@ import { CreateTourComponent } from './components/create-tour/create-tour.compon
 import { PositionSimulatorComponent } from './components/position-simulator/position-simulator.component';
 import { TourExecutionComponent } from './components/tour-execution/tour-execution.component';
 import { TourKeypointsMapComponent } from './components/tour-keypoints-map/tour-keypoints-map.component';
+import { CartComponent } from './components/cart/cart.component';
+import { PurchasesComponent } from './components/purchases/purchases.component';
+import { ToursComponent } from './components/tours/tours.component';
+import { TourDetailComponent } from './components/tour-detail/tour-detail.component';
 
 export const routes: Routes = [
   { 
@@ -78,6 +82,10 @@ export const routes: Routes = [
   component: TourKeypointsMapComponent,
   title: 'SOA Tours - Manage Keypoints'
   },
+  { path: 'tours', component: ToursComponent },
+  { path: 'tours/:id', component: TourDetailComponent },
+  { path: 'cart', component: CartComponent },
+  { path: 'purchases', component: PurchasesComponent },
   // WILDCARD RUTA MORA BITI POSLEDNJA:
   { 
     path: '**', 

@@ -12,6 +12,8 @@ import (
     "go.mongodb.org/mongo-driver/bson/primitive"
     "go.mongodb.org/mongo-driver/mongo"
     "go.mongodb.org/mongo-driver/mongo/options"
+    "io"
+    "encoding/json"
 )
 
 type TourHandler struct {
@@ -24,31 +26,37 @@ func NewTourHandler(db *mongo.Database) *TourHandler {
 
 // GET /tours - get all tours with optional filtering
 func (h *TourHandler) GetTours(c *gin.Context) {
-    collection := h.DB.Collection("tours")
+    // Get query parameters
+    authorIDStr := c.Query("author_id")
+    status := c.Query("status")
     
-    // Build filter
+    collection := h.DB.Collection("tours")
     filter := bson.M{}
     
     // Filter by author if specified
-    if authorID := c.Query("author_id"); authorID != "" {
-        if id, err := strconv.Atoi(authorID); err == nil {
-            filter["author_id"] = id
+    if authorIDStr != "" {
+        authorID, err := strconv.Atoi(authorIDStr)
+        if err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid author ID"})
+            return
         }
+        filter["author_id"] = authorID
     }
     
     // Filter by status if specified
-    if status := c.Query("status"); status != "" {
+    if status != "" {
         filter["status"] = status
-    }
-    
-    // Filter by difficulty if specified
-    if difficulty := c.Query("difficulty"); difficulty != "" {
-        filter["difficulty"] = difficulty
+    } else {
+        // Default: only show published tours for general browsing
+        userIDStr := c.GetHeader("X-User-ID")
+        if userIDStr == "" {
+            filter["status"] = "published"
+        }
     }
 
     cursor, err := collection.Find(context.TODO(), filter)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get tours"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
         return
     }
     defer cursor.Close(context.TODO())
@@ -59,10 +67,68 @@ func (h *TourHandler) GetTours(c *gin.Context) {
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
-        "tours": tours,
-        "count": len(tours),
-    })
+    // For published tours, check purchase status and limit keypoints
+    userIDStr := c.GetHeader("X-User-ID")
+    if userIDStr != "" {
+        userID, err := strconv.Atoi(userIDStr)
+        if err == nil {
+            for i, tour := range tours {
+                if tour.Status == "published" {
+                    hasPurchased := h.checkTourPurchase(userID, tour.ID.Hex())
+                    if !hasPurchased && len(tour.Keypoints) > 0 {
+                        tours[i].Keypoints = tour.Keypoints[:1] // Only first keypoint
+                    }
+                }
+            }
+        }
+    } else {
+        // No user ID, show only first keypoint for published tours
+        for i, tour := range tours {
+            if tour.Status == "published" && len(tour.Keypoints) > 0 {
+                tours[i].Keypoints = tour.Keypoints[:1]
+            }
+        }
+    }
+
+    c.JSON(http.StatusOK, gin.H{"tours": tours})
+}
+
+func (h *TourHandler) checkTourPurchase(userID int, tourID string) bool {
+    // Call commerce service to check purchase
+    commerceURL := "http://commerce-service:8083/purchase/check/" + tourID
+    
+    client := &http.Client{Timeout: time.Second * 10}
+    req, err := http.NewRequest("GET", commerceURL, nil)
+    if err != nil {
+        return false
+    }
+    
+    req.Header.Set("X-User-ID", strconv.Itoa(userID))
+    
+    resp, err := client.Do(req)
+    if err != nil {
+        return false
+    }
+    defer resp.Body.Close()
+    
+    if resp.StatusCode != http.StatusOK {
+        return false
+    }
+    
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return false
+    }
+    
+    var purchaseInfo struct {
+        IsPurchased bool `json:"is_purchased"`
+    }
+    
+    if err := json.Unmarshal(body, &purchaseInfo); err != nil {
+        return false
+    }
+    
+    return purchaseInfo.IsPurchased
 }
 
 // GET /tours/:id - get tour by ID
@@ -84,6 +150,25 @@ func (h *TourHandler) GetTourByID(c *gin.Context) {
         }
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
         return
+    }
+
+    // Check if user has purchased this tour (only if X-User-ID is provided)
+    userIDStr := c.GetHeader("X-User-ID")
+    if userIDStr != "" && tour.Status == "published" {
+        userID, err := strconv.Atoi(userIDStr)
+        if err == nil {
+            hasPurchased := h.checkTourPurchase(userID, tour.ID.Hex())
+            
+            // If not purchased, limit the keypoints to only the first one
+            if !hasPurchased && len(tour.Keypoints) > 0 {
+                tour.Keypoints = tour.Keypoints[:1] // Only show first keypoint
+            }
+        }
+    } else if tour.Status == "published" {
+        // No user ID provided, assume not purchased - show only first keypoint
+        if len(tour.Keypoints) > 0 {
+            tour.Keypoints = tour.Keypoints[:1]
+        }
     }
 
     c.JSON(http.StatusOK, gin.H{"tour": tour})

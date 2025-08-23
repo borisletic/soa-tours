@@ -75,6 +75,24 @@ import { ApiService } from '../../services/api.service';
               Position Simulator
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link text-white" href="/tours">
+              <i class="fas fa-route me-1"></i>
+              Tours
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-white" href="/cart">
+              <i class="fas fa-shopping-cart me-1"></i>
+              Cart
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-white" href="/purchases">
+              <i class="fas fa-receipt me-1"></i>
+              Purchases
+            </a>
+          </li>
           </ul>
           
           <ul class="navbar-nav">
