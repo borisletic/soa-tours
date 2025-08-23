@@ -435,33 +435,57 @@ export class TourKeypointsMapComponent implements OnInit, AfterViewInit {
   }
 
   saveKeypoint(): void {
-    if (!this.currentKeypoint.name || !this.currentKeypoint.description || !this.tour) return;
+    // Add detailed logging to debug the issue
+    console.log('Current keypoint data:', this.currentKeypoint);
+    console.log('Name:', this.currentKeypoint.name);
+    console.log('Description:', this.currentKeypoint.description);
+    console.log('Tour:', this.tour);
+
+    // Check if required fields are present and not just whitespace
+    const name = this.currentKeypoint.name?.trim();
+    const description = this.currentKeypoint.description?.trim();
+
+    if (!name || !description || !this.tour) {
+      console.log('Validation failed - missing required fields');
+      alert('Please fill in both Name and Description fields');
+      return;
+    }
 
     const keypointData = {
-      name: this.currentKeypoint.name,
-      description: this.currentKeypoint.description,
+      name: name,
+      description: description,
       latitude: this.currentKeypoint.latitude!,
       longitude: this.currentKeypoint.longitude!,
       images: this.currentKeypoint.images || []
     };
 
+    console.log('Sending keypoint data:', keypointData);
+
     if (this.editingKeypointIndex >= 0) {
       // Update existing keypoint
       this.apiService.updateKeypoint(this.tour.id, this.editingKeypointIndex, keypointData).subscribe({
-        next: () => {
+        next: (response) => {
+          console.log('Update response:', response);
           this.closeKeypointModal();
           this.loadTour();
         },
-        error: (error) => console.error('Error updating keypoint:', error)
+        error: (error) => {
+          console.error('Error updating keypoint:', error);
+          alert('Failed to update keypoint: ' + (error.error?.error || error.message));
+        }
       });
     } else {
       // Add new keypoint
       this.apiService.addKeypoint(this.tour.id, keypointData).subscribe({
-        next: () => {
+        next: (response) => {
+          console.log('Add response:', response);
           this.closeKeypointModal();
           this.loadTour();
         },
-        error: (error) => console.error('Error adding keypoint:', error)
+        error: (error) => {
+          console.error('Error adding keypoint:', error);
+          alert('Failed to add keypoint: ' + (error.error?.error || error.message));
+        }
       });
     }
   }

@@ -50,13 +50,14 @@ type CreateTourRequest struct {
 }
 
 type UpdateTourRequest struct {
-    Name        string   `json:"name" binding:"min=1,max=100"`
-    Description string   `json:"description" binding:"min=1"`
-    Difficulty  string   `json:"difficulty" binding:"oneof=easy medium hard"`
-    Price       float64  `json:"price" binding:"min=0"`
-    DistanceKm  float64  `json:"distance_km" binding:"min=0"`
+    Name        string   `json:"name" binding:"omitempty,min=1,max=100"`      // ✅ Added omitempty
+    Description string   `json:"description" binding:"omitempty,min=1"`       // ✅ Added omitempty  
+    Difficulty  string   `json:"difficulty" binding:"omitempty,oneof=easy medium hard"` // ✅ Added omitempty
+    Price       float64  `json:"price" binding:"omitempty,min=0"`            // ✅ Added omitempty
+    DistanceKm  float64  `json:"distance_km" binding:"omitempty,min=0"`      // ✅ Added omitempty
     Tags        []string `json:"tags"`
-    Status      string   `json:"status" binding:"oneof=draft published archived"`
+    Status      string   `json:"status" binding:"omitempty,oneof=draft published archived"` // ✅ Added omitempty
+    TransportTimes []TransportTime `json:"transport_times"`                   // ✅ Added this field
 }
 
 type AddKeypointRequest struct {
