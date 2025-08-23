@@ -3,6 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { ApiService } from '../../services/api.service';
+import { ActivatedRoute } from '@angular/router';
+import { Router } from '@angular/router';
+
+
 
 interface Keypoint {
   name: string;
@@ -326,11 +330,23 @@ export class TourKeypointsMapComponent implements OnInit, AfterViewInit {
   private defaultLat = 44.8176;
   private defaultLng = 20.4633;
 
-  constructor(private apiService: ApiService) {}
+  constructor(
+    private apiService: ApiService,
+    private route: ActivatedRoute,
+    private router: Router
+    ) {}
 
   ngOnInit(): void {
+  // Get ":id" from URL (e.g. /tour-keypoints/68a9191d3d98d4c5d9b30789)
+  this.tourId = this.route.snapshot.paramMap.get('id')!;
+  console.log('Tour ID from route:', this.tourId);
+
+  if (this.tourId) {
     this.loadTour();
+  } else {
+    console.error('No tourId found in route!');
   }
+}
 
   ngAfterViewInit(): void {
     setTimeout(() => {
@@ -339,20 +355,26 @@ export class TourKeypointsMapComponent implements OnInit, AfterViewInit {
   }
 
   private loadTour(): void {
-    if (!this.tourId) return;
-    
+    if (!this.tourId) {
+      console.error('No tourId provided!');
+      return;
+    }
+
     this.apiService.getTourById(this.tourId).subscribe({
       next: (response: any) => {
-        if (response.tour) {
-          this.tour = response.tour;
-          this.updateMapMarkers();
-        }
+        console.log('Tour API response:', response);
+        // Handle both cases
+        this.tour = response.tour ?? response;
+        console.log('Parsed tour object:', this.tour);
+        this.updateMapMarkers();
       },
       error: (error) => {
         console.error('Error loading tour:', error);
       }
     });
   }
+
+
 
   private initializeMap(): void {
     try {
@@ -611,6 +633,12 @@ export class TourKeypointsMapComponent implements OnInit, AfterViewInit {
   }
 
   goBack(): void {
-    this.tourUpdated.emit(this.tour);
+    if (this.tour) {
+      // Go back to that tour’s detail page
+      this.router.navigate(['/tours', this.tour.id]);
+    } else {
+      // Fallback: go to tours list
+      this.router.navigate(['/tours']);
+    }
   }
 }
