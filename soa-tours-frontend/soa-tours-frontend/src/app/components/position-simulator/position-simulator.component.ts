@@ -363,12 +363,12 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
   checkActiveTour(): void {
     this.apiService.getUserExecutions().subscribe({
       next: (response) => {
-        // Dodaj null check
         const executions = response?.executions || [];
         const activeTour = executions.find(exec => exec.status === 'active');
         this.activeTour.set(activeTour || null);
         
         if (activeTour) {
+          console.log('Active tour found:', activeTour);
           this.loadTourKeypoints(activeTour.tour_id);
         }
       },
@@ -435,55 +435,66 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
 
   // NOVA METODA: Quick action za test scenarije
   simulateTourProgress(): void {
-  const tour = this.activeTour();
-  if (!tour) {
-    alert('No active tour found. Please start a tour first.');
-    return;
-  }
+    const tour = this.activeTour();
+    if (!tour) {
+      alert('No active tour found. Please start a tour first.');
+      return;
+    }
 
-  this.loading.set(true);
-  this.loadingMessage.set('Moving to next keypoint...');
-  
-  this.apiService.getTourById(tour.tour_id).subscribe({
-    next: (response) => {
-      const tourData = response.tour || response;
-      const keypoints = tourData.keypoints || [];
-      
-      if (keypoints.length === 0) {
-        this.loading.set(false);
-        this.loadingMessage.set('');
-        alert('This tour has no keypoints.');
-        return;
-      }
-
-      // ISPRAVLJENA LOGIKA - koristi keypoint.order umesto kp.order
-      const completedIndices = tour.completed_keypoints?.map((kp: any) => kp.keypoint_index) || [];
-      
-      // Sortiraj keypoints po order i nađi prvi necompletiran
-      const sortedKeypoints = keypoints.sort((a: any, b: any) => a.order - b.order);
-      const nextKeypoint = sortedKeypoints.find((keypoint: any) => !completedIndices.includes(keypoint.order));
-
-      if (nextKeypoint) {
-        this.moveToKeypoint(nextKeypoint);
-        setTimeout(() => {
+    this.loading.set(true);
+    this.loadingMessage.set('Moving to next keypoint...');
+    
+    this.apiService.getTourById(tour.tour_id).subscribe({
+      next: (response) => {
+        const tourData = response.tour || response;
+        const keypoints = tourData.keypoints || [];
+        
+        console.log('Tour keypoints:', keypoints);
+        console.log('Completed keypoints:', tour.completed_keypoints);
+        
+        if (keypoints.length === 0) {
           this.loading.set(false);
           this.loadingMessage.set('');
-          alert(`Moved to keypoint: ${nextKeypoint.name}`);
-        }, 1000);
-      } else {
+          alert('This tour has no keypoints.');
+          return;
+        }
+
+        // ISPRAVLJENA LOGIKA - koristi pravilno mapiranje
+        const completedOrders = tour.completed_keypoints?.map((kp: any) => kp.keypoint_index) || [];
+        console.log('Completed orders:', completedOrders);
+        
+        // Sortiraj keypoints po order i nađi prvi necompletiran
+        const sortedKeypoints = keypoints.sort((a: any, b: any) => a.order - b.order);
+        const nextKeypoint = sortedKeypoints.find((keypoint: any) => !completedOrders.includes(keypoint.order));
+        
+        console.log('Next keypoint:', nextKeypoint);
+
+        if (nextKeypoint) {
+          // Dodaj mali random offset da ne bude tačno na keypoint
+          const lat = nextKeypoint.latitude + (Math.random() - 0.5) * 0.0002;
+          const lng = nextKeypoint.longitude + (Math.random() - 0.5) * 0.0002;
+          
+          this.setPosition(lat, lng);
+          
+          setTimeout(() => {
+            this.loading.set(false);
+            this.loadingMessage.set('');
+            alert(`Moved to keypoint: ${nextKeypoint.name}`);
+          }, 1000);
+        } else {
+          this.loading.set(false);
+          this.loadingMessage.set('');
+          alert('All keypoints completed!');
+        }
+      },
+      error: (error) => {
         this.loading.set(false);
         this.loadingMessage.set('');
-        alert('All keypoints completed!');
+        console.error('Failed to load tour data:', error);
+        alert('Failed to load tour data.');
       }
-    },
-    error: (error) => {
-      this.loading.set(false);
-      this.loadingMessage.set('');
-      console.error('Failed to load tour data:', error);
-      alert('Failed to load tour data.');
-    }
-  });
-}
+    });
+  }
 
   // Helper method for distance calculation
   private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -600,18 +611,14 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    this.loading.set(true);
-    this.loadingMessage.set('Saving your position...');
-
     const positionData = {
       latitude,
       longitude,
-      accuracy: 10.0 // Simulated accuracy
+      accuracy: 10.0
     };
 
     this.apiService.updatePosition(user.id, positionData).subscribe({
       next: (response: any) => {
-        this.loading.set(false);
         this.currentPosition.set({
           user_id: user.id,
           latitude,
@@ -627,14 +634,8 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
         if (this.activeTour()) {
           this.loadTourKeypoints(this.activeTour()!.tour_id);
         }
-        
-        // Show success message briefly
-        this.loadingMessage.set('Position saved successfully!');
-        setTimeout(() => this.loadingMessage.set(''), 2000);
       },
       error: (error) => {
-        this.loading.set(false);
-        this.error.set('Failed to save position. Please try again.');
         console.error('Error saving position:', error);
       }
     });

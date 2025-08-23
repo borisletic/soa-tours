@@ -430,22 +430,48 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Čita tourId iz query parametara ili route parametara
+    // PRVO - proveri da li već postoji aktivna tura
+    this.loadExistingActiveTour();
+    
+    // DRUGO - čita tourId iz query parametara
     this.route.queryParams.subscribe(params => {
       if (params['tourId']) {
         this.tourId = params['tourId'];
-        this.startTour();
+        // Ne pozivaj startTour ovdje jer možda već postoji aktivna tura
+        this.loadTourDetails();
       }
     });
-    
-    if (!this.tourId) {
-      this.route.params.subscribe(params => {
-        if (params['id']) {
-          this.tourId = params['id'];
-          this.startTour();
+  }
+
+  private loadExistingActiveTour(): void {
+    this.apiService.getUserExecutions().subscribe({
+      next: (response) => {
+        const executions = response?.executions || [];
+        const activeTour = executions.find(exec => exec.status === 'active');
+        
+        if (activeTour) {
+          // Postoji aktivna tura
+          this.execution.set(activeTour);
+          this.tourId = activeTour.tour_id;
+          this.loadTourDetails();
+          this.startAutoCheck();
+          
+          // Ažuriraj current position ako postoji
+          if (activeTour.current_position) {
+            this.currentPosition.set({
+              user_id: activeTour.user_id,
+              latitude: activeTour.current_position.latitude,
+              longitude: activeTour.current_position.longitude,
+              timestamp: new Date(activeTour.current_position.timestamp),
+              accuracy: 10
+            });
+          }
         }
-      });
-    }
+      },
+      error: () => {
+        console.log('No active tour found');
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -479,15 +505,19 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
   }
 
   private loadTourDetails(): void {
+    if (!this.tourId) return;
+    
     this.apiService.getTourById(this.tourId).subscribe({
       next: (response) => {
-        this.tourDetails.set(response.tour || response);
+        const tourData = response.tour || response;
+        this.tourDetails.set(tourData);
+        console.log('Tour details loaded:', tourData);
       },
       error: (error) => {
         console.warn('Failed to load tour details:', error);
       }
     });
-}
+  }
 
   private startAutoCheck(): void {
     // Počni auto-checking svakih 10 sekundi
@@ -536,9 +566,15 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
         this.loading.set(false);
         this.execution.set(response.tour_execution);
 
-        // Ažuriraj trenutnu poziciju
+        // ISPRAVKA - ažuriraj trenutnu poziciju
         if (response.tour_execution.current_position) {
-          this.currentPosition.set(response.tour_execution.current_position as Position);
+          this.currentPosition.set({
+            user_id: response.tour_execution.user_id,
+            latitude: response.tour_execution.current_position.latitude,
+            longitude: response.tour_execution.current_position.longitude,
+            timestamp: new Date(response.tour_execution.current_position.timestamp),
+            accuracy: 10
+          });
         }
 
         if (response.near_keypoint) {
@@ -546,13 +582,13 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
           this.nearKeypointName.set(response.keypoint_name || '');
           this.nearKeypointDistance.set(response.distance_to_keypoint || null);
 
-          // Obriši obaveštenje nakon 5 sekundi
+          // Clear notification nakon 5 sekundi
           setTimeout(() => {
             this.nearKeypoint.set(false);
           }, 5000);
         }
 
-        // Zaustavi auto-check ako je tura završena ili napuštena
+        // Stop auto-check ako je tura završena
         if (response.tour_execution.status !== 'active') {
           this.stopAutoCheck();
         }
