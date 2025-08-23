@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 export interface ServiceStatus {
   gateway: boolean;
@@ -845,7 +846,16 @@ getCart(userId?: number): Observable<{cart: ShoppingCart, message: string}> {
   const headers = new HttpHeaders({
     'X-User-ID': currentUserId.toString()
   });
-  return this.http.get<{cart: ShoppingCart, message: string}>(`${this.COMMERCE_API}/cart`, { headers });
+  return this.http.get<{cart: ShoppingCart, message: string}>(`${this.COMMERCE_API}/cart`, { headers })
+    .pipe(
+      map(response => ({
+        ...response,
+        cart: {
+          ...response.cart,
+          items: response.cart?.items || [] // Ensure items is always an array
+        }
+      }))
+    );
 }
 
 addToCart(tourData: AddToCartRequest, userId?: number): Observable<{message: string}> {

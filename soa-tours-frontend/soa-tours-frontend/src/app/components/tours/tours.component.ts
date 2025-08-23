@@ -402,12 +402,16 @@ export class ToursComponent implements OnInit {
   loadCart(): void {
     this.apiService.getCart().subscribe({
       next: (response) => {
-        const itemIds = new Set(response.cart.items.map(item => item.tour_id));
+        // FIX: Add null/undefined checks for cart and items
+        const items = response?.cart?.items || [];
+        const itemIds = new Set(items.map(item => item.tour_id));
         this.cartItems.set(itemIds);
-        this.cartItemCount.set(response.cart.items.length);
+        this.cartItemCount.set(items.length);
       },
       error: () => {
         // Cart loading failed, continue without cart info
+        this.cartItems.set(new Set());
+        this.cartItemCount.set(0);
       }
     });
   }

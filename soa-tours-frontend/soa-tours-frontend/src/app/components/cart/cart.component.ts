@@ -48,7 +48,7 @@ import { ApiService, ShoppingCart, CartItem } from '../../services/api.service';
       <div *ngIf="!loading() && !error()">
         
         <!-- Empty Cart -->
-        <div *ngIf="!cart() || cart()!.items.length === 0" class="card">
+        <div *ngIf="!cart() || !cart()?.items || cart()!.items.length === 0" class="card">
           <div class="card-body text-center py-5">
             <i class="fas fa-shopping-cart fa-4x text-muted mb-3"></i>
             <h4>Your cart is empty</h4>
@@ -63,7 +63,7 @@ import { ApiService, ShoppingCart, CartItem } from '../../services/api.service';
         </div>
 
         <!-- Cart with Items -->
-        <div *ngIf="cart() && cart()!.items.length > 0">
+        <div *ngIf="cart() && cart()?.items && cart()!.items.length > 0">
           <div class="row">
             <div class="col-lg-8">
               <!-- Cart Items -->
@@ -71,7 +71,7 @@ import { ApiService, ShoppingCart, CartItem } from '../../services/api.service';
                 <div class="card-header">
                   <h5 class="mb-0">
                     <i class="fas fa-list me-2"></i>
-                    Cart Items ({{cart()!.items.length}})
+                    Cart Items ({{cart()?.items?.length || 0}})
                   </h5>
                 </div>
                 <div class="card-body p-0">
@@ -266,7 +266,8 @@ export class CartComponent implements OnInit {
   }
 
   checkout(): void {
-    if (!this.cart() || this.cart()!.items.length === 0) {
+    // FIX: Add comprehensive null checks
+    if (!this.cart() || !this.cart()?.items || this.cart()!.items.length === 0) {
       return;
     }
 

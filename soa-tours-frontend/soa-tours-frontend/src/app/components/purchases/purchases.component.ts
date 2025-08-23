@@ -245,11 +245,13 @@ export class PurchasesComponent implements OnInit {
 
     this.apiService.getPurchases().subscribe({
       next: (response) => {
-        this.purchases.set(response.purchases);
+        // FIX: Ensure response.purchases is always an array
+        this.purchases.set(response?.purchases || []);
         this.loading.set(false);
       },
       error: (error) => {
         this.error.set(error.error?.error || 'Failed to load purchases');
+        this.purchases.set([]); // FIX: Set empty array on error
         this.loading.set(false);
       }
     });
