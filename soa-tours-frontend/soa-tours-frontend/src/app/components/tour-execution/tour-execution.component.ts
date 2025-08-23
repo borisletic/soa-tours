@@ -2,7 +2,7 @@
 import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { ApiService } from '../../services/api.service';
+import { ApiService, Position } from '../../services/api.service';
 
 interface TourExecution {
   id: string;
@@ -42,222 +42,299 @@ interface CheckKeypointsResponse {
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="container">
-      <div class="row">
-        <div class="col-12">
-          <div class="card shadow-lg">
-            <div class="card-header" [class]="getHeaderClass()">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  <h3 class="mb-1">
-                    <i [class]="getStatusIcon()"></i>
-                    {{getStatusText()}}
-                  </h3>
-                  <p class="mb-0">Tour ID: {{tourId}}</p>
-                </div>
-                
-                <div class="text-end">
-                  <div class="btn-group">
-                    <button 
-                      class="btn btn-outline-light"
-                      (click)="checkPosition()"
-                      [disabled]="loading() || execution()?.status !== 'active'">
-                      <i class="fas fa-sync-alt me-1" [class.fa-spin]="loading()"></i>
-                      Check Position
-                    </button>
-                    
-                    <button 
-                      class="btn btn-danger"
-                      (click)="abandonTour()"
-                      [disabled]="loading() || execution()?.status !== 'active'"
-                      *ngIf="execution()?.status === 'active'">
-                      <i class="fas fa-times me-1"></i>
-                      Abandon Tour
-                    </button>
-                  </div>
+  <div class="container">
+    <div class="row">
+      <div class="col-12">
+        <div class="card shadow-lg">
+          <div class="card-header" [class]="getHeaderClass()">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h3 class="mb-1">
+                  <i [class]="getStatusIcon()"></i>
+                  {{getStatusText()}}
+                </h3>
+                <p class="mb-0" *ngIf="tourDetails()">
+                  {{tourDetails().name}} 
+                  <span class="badge bg-light text-dark ms-2">{{tourDetails().difficulty | titlecase}}</span>
+                </p>
+                <p class="mb-0" *ngIf="!tourDetails()">Tour ID: {{tourId}}</p>
+              </div>
+              
+              <div class="text-end">
+                <div class="btn-group">
+                  <button 
+                    class="btn btn-outline-light"
+                    (click)="checkPosition()"
+                    [disabled]="loading() || execution()?.status !== 'active'">
+                    <i class="fas fa-sync-alt me-1" [class.fa-spin]="loading()"></i>
+                    Check Position
+                  </button>                                    
+                  <button 
+                    class="btn btn-danger"
+                    (click)="abandonTour()"
+                    [disabled]="loading() || execution()?.status !== 'active'"
+                    *ngIf="execution()?.status === 'active'">
+                    <i class="fas fa-times me-1"></i>
+                    Abandon Tour
+                  </button>
                 </div>
               </div>
             </div>
-            
-            <div class="card-body">
-              <!-- Current Status -->
-              <div class="row mb-4">
-                <div class="col-md-6">
-                  <div class="info-card">
-                    <h6><i class="fas fa-info-circle me-2"></i>Tour Status</h6>
-                    <div class="d-flex align-items-center">
-                      <span [class]="getStatusBadgeClass()">
-                        {{execution()?.status | titlecase}}
-                      </span>
-                      <span class="ms-3 text-muted" *ngIf="execution()">
-                        Started: {{formatDate(execution()!.started_at)}}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="col-md-6">
-                  <div class="info-card">
-                    <h6><i class="fas fa-map-marker-alt me-2"></i>Current Position</h6>
-                    <div *ngIf="execution()?.current_position">
-                      <small class="text-muted">
-                        {{execution()!.current_position!.latitude.toFixed(6)}}, 
-                        {{execution()!.current_position!.longitude.toFixed(6)}}
-                      </small>
-                      <br>
-                      <small class="text-muted">
-                        Updated: {{formatDate(execution()!.current_position!.timestamp)}}
-                      </small>
-                    </div>
-                    <div *ngIf="!execution()?.current_position" class="text-warning">
-                      <i class="fas fa-exclamation-triangle me-1"></i>
-                      No position data
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Progress -->
-              <div class="mb-4" *ngIf="execution()">
-                <h6><i class="fas fa-tasks me-2"></i>Progress</h6>
-                <div class="progress mb-2">
-                  <div 
-                    class="progress-bar" 
-                    [style.width.%]="getProgressPercentage()"
-                    [class]="getProgressBarClass()">
-                    {{getCompletedKeypoints().length}} / {{getTotalKeypoints()}} keypoints
-                  </div>
-                </div>
-                <small class="text-muted">
-                  {{getProgressPercentage()}}% complete
+
+            <!-- Auto-check countdown -->
+            <div class="mt-2" *ngIf="execution()?.status === 'active'">
+              <div class="d-flex align-items-center justify-content-between">
+                <small class="text-light opacity-75">
+                  <i class="fas fa-clock me-1"></i>
+                  Next position check in {{countdown()}} seconds
                 </small>
-              </div>
-              
-              <!-- Completed Keypoints -->
-              <div class="mb-4" *ngIf="getCompletedKeypoints().length > 0">
-                <h6><i class="fas fa-check-circle me-2"></i>Completed Keypoints</h6>
-                <div class="completed-keypoints">
-                  <div 
-                    class="keypoint-item completed" 
-                    *ngFor="let kp of getCompletedKeypoints()">
-                    <div class="d-flex justify-content-between align-items-center">
-                      <div>
-                        <strong>Keypoint #{{kp.keypoint_index + 1}}</strong>
-                        <br>
-                        <small class="text-success">
-                          <i class="fas fa-check me-1"></i>
-                          Completed at {{formatDate(kp.completed_at)}}
-                        </small>
-                      </div>
-                      <div class="text-end">
-                        <small class="text-muted">
-                          {{kp.latitude.toFixed(4)}}, {{kp.longitude.toFixed(4)}}
-                        </small>
-                      </div>
-                    </div>
-                  </div>
+                <div class="progress" style="width: 100px; height: 4px;">
+                  <div class="progress-bar bg-light" 
+                       [style.width.%]="(10 - countdown()) * 10"></div>
                 </div>
               </div>
-              
-              <!-- Near Keypoint Alert -->
-              <div class="alert alert-success" *ngIf="nearKeypoint()">
-                <h6>
-                  <i class="fas fa-location-arrow me-2"></i>
-                  You're near a keypoint!
-                </h6>
-                <p class="mb-2">
-                  <strong>{{nearKeypointName()}}</strong> 
-                  ({{nearKeypointDistance()?.toFixed(1)}}m away)
-                </p>
-                <small>
-                  Keypoint has been automatically marked as completed.
-                </small>
-              </div>
-              
-              <!-- Auto-check status -->
-              <div class="alert alert-info" *ngIf="execution()?.status === 'active'">
-                <div class="d-flex align-items-center justify-content-between">
-                  <div>
-                    <i class="fas fa-clock me-2"></i>
-                    Auto-checking your position every 10 seconds...
-                  </div>
-                  <div>
-                    <span class="badge bg-primary">
-                      Next check: {{countdown()}}s
+            </div>
+          </div>
+          
+          <div class="card-body">
+            <!-- Near Keypoint Alert -->
+            <div class="alert alert-success alert-dismissible" 
+                 *ngIf="nearKeypoint()" 
+                 role="alert">
+              <h6 class="alert-heading">
+                <i class="fas fa-map-marker-alt me-2"></i>
+                Keypoint Reached!
+              </h6>
+              <p class="mb-1">
+                You've reached <strong>{{nearKeypointName()}}</strong>
+                <span *ngIf="nearKeypointDistance()" class="text-muted">
+                  ({{nearKeypointDistance()! | number:'1.0-1'}}m away)
+                </span>
+              </p>
+              <small class="text-muted">This keypoint has been automatically marked as completed.</small>
+            </div>
+
+            <!-- Progress Section -->
+            <div class="row mb-4">
+              <div class="col-md-8">
+                <div class="info-card">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Tour Progress</h6>
+                    <span [class]="getStatusBadgeClass()">
+                      {{execution()?.status || 'Loading'}}
                     </span>
                   </div>
+                  
+                  <div class="progress mb-2" style="height: 10px;">
+                    <div 
+                      class="progress-bar" 
+                      [class]="getProgressBarClass()"
+                      [style.width.%]="getProgressPercentage()"
+                      role="progressbar">
+                    </div>
+                  </div>
+                  
+                  <div class="d-flex justify-content-between">
+                    <small class="text-muted">
+                      {{getCompletedKeypoints().length}} / {{getTotalKeypoints()}} keypoints completed
+                    </small>
+                    <small class="text-muted">
+                      {{getProgressPercentage()}}%
+                    </small>
+                  </div>
                 </div>
               </div>
-              
-              <!-- Completion Message -->
-              <div class="alert alert-success" *ngIf="execution()?.status === 'completed'">
-                <h5>
-                  <i class="fas fa-trophy me-2"></i>
-                  Congratulations! Tour Completed!
-                </h5>
-                <p class="mb-0">
-                  You completed the tour on {{formatDate(execution()!.completed_at!)}}
-                </p>
-              </div>
-              
-              <!-- Abandonment Message -->
-              <div class="alert alert-warning" *ngIf="execution()?.status === 'abandoned'">
-                <h6>
-                  <i class="fas fa-times-circle me-2"></i>
-                  Tour Abandoned
-                </h6>
-                <p class="mb-0">
-                  Tour was abandoned on {{formatDate(execution()!.abandoned_at!)}}
-                </p>
+
+              <div class="col-md-4">
+                <div class="info-card">
+                  <h6 class="mb-2">Tour Duration</h6>
+                  <div class="h5 text-primary mb-0" *ngIf="execution()?.started_at">
+                    {{formatDuration(execution()!.started_at)}}
+                  </div>
+                  <small class="text-muted">Since start</small>
+                </div>
               </div>
             </div>
+
+            <!-- Current Status Info -->
+            <div class="row mb-4">
+              <div class="col-md-6">
+                <div class="info-card">
+                  <h6 class="mb-2">
+                    <i class="fas fa-location-arrow me-1"></i>
+                    Current Position
+                  </h6>
+                  <div *ngIf="currentPosition(); else noPosition">
+                    <p class="mb-1">
+                      <strong>Lat:</strong> {{currentPosition()!.latitude.toFixed(6)}}<br>
+                      <strong>Lng:</strong> {{currentPosition()!.longitude.toFixed(6)}}
+                    </p>
+                    <small class="text-muted">
+                      Updated: {{formatDate(currentPosition()!.timestamp)}}
+                    </small>
+                  </div>
+                  <ng-template #noPosition>
+                    <p class="text-muted mb-1">Position not available</p>
+                    <button 
+                      class="btn btn-sm btn-outline-primary"
+                      (click)="goToPositionSimulator()">
+                      Set Position
+                    </button>
+                  </ng-template>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="info-card">
+                  <h6 class="mb-2">
+                    <i class="fas fa-clock me-1"></i>
+                    Last Activity
+                  </h6>
+                  <p class="mb-1" *ngIf="execution()?.last_activity">
+                    {{formatDate(execution()!.last_activity)}}
+                  </p>
+                  <small class="text-muted">Position check or keypoint completion</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Completed Keypoints -->
+            <div class="mb-4" *ngIf="getCompletedKeypoints().length > 0">
+              <h6 class="mb-3">
+                <i class="fas fa-check-circle me-2 text-success"></i>
+                Completed Keypoints ({{getCompletedKeypoints().length}})
+              </h6>
+              <div class="row">
+                <div 
+                  class="col-md-6 mb-2" 
+                  *ngFor="let keypoint of getCompletedKeypoints()">
+                  <div class="keypoint-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                      <div>
+                        <h6 class="mb-1">
+                          <span class="badge bg-success rounded-circle me-2">
+                            {{keypoint.keypoint_index}}
+                          </span>
+                          Keypoint {{keypoint.keypoint_index}}
+                        </h6>
+                        <small class="text-muted">
+                          Completed: {{formatDate(keypoint.completed_at)}}
+                        </small>
+                      </div>
+                      <i class="fas fa-check-circle text-success"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tour Details -->
+            <div class="mb-4" *ngIf="tourDetails()">
+              <h6 class="mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                Tour Information
+              </h6>
+              <div class="row">
+                <div class="col-md-6">
+                  <small class="text-muted">Distance:</small>
+                  <p class="mb-2">{{tourDetails().distance_km | number:'1.1-1'}} km</p>
+                </div>
+                <div class="col-md-6">
+                  <small class="text-muted">Total Keypoints:</small>
+                  <p class="mb-2">{{tourDetails().keypoints?.length || 0}}</p>
+                </div>
+                <div class="col-12" *ngIf="tourDetails().description">
+                  <small class="text-muted">Description:</small>
+                  <p class="mb-2">{{tourDetails().description}}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Completion Message -->
+            <div class="alert alert-success" *ngIf="execution()?.status === 'completed'">
+              <h6>
+                <i class="fas fa-trophy me-2"></i>
+                Congratulations! Tour Completed
+              </h6>
+              <p class="mb-0">
+                You completed the tour on {{formatDate(execution()!.completed_at!)}}
+              </p>
+              <p class="mb-0 mt-2">
+                Total duration: {{formatDuration(execution()!.started_at)}}
+              </p>
+            </div>
             
-            <div class="card-footer">
-              <div class="d-flex justify-content-between">
+            <!-- Abandonment Message -->
+            <div class="alert alert-warning" *ngIf="execution()?.status === 'abandoned'">
+              <h6>
+                <i class="fas fa-times-circle me-2"></i>
+                Tour Abandoned
+              </h6>
+              <p class="mb-0">
+                Tour was abandoned on {{formatDate(execution()!.abandoned_at!)}}
+              </p>
+              <p class="mb-0 mt-1">
+                Duration: {{formatDuration(execution()!.started_at)}}
+              </p>
+            </div>
+          </div>
+          
+          <div class="card-footer">
+            <div class="d-flex justify-content-between">
+              <div>
                 <button 
-                  class="btn btn-outline-secondary"
+                  class="btn btn-outline-secondary me-2"
                   (click)="goToPositionSimulator()">
                   <i class="fas fa-location-arrow me-1"></i>
                   Position Simulator
                 </button>
+
+                <button 
+                  class="btn btn-outline-info"
+                  (click)="goToTourDetail()"
+                  *ngIf="tourId">
+                  <i class="fas fa-info-circle me-1"></i>
+                  Tour Details
+                </button>
+              </div>
+              
+              <div>
+                <button 
+                  class="btn btn-primary me-2"
+                  (click)="goToTours()">
+                  <i class="fas fa-route me-1"></i>
+                  All Tours
+                </button>
                 
-                <div>
-                  <button 
-                    class="btn btn-primary me-2"
-                    (click)="goToTours()">
-                    <i class="fas fa-route me-1"></i>
-                    All Tours
-                  </button>
-                  
-                  <button 
-                    class="btn btn-secondary"
-                    (click)="goBack()">
-                    <i class="fas fa-arrow-left me-1"></i>
-                    Back
-                  </button>
-                </div>
+                <button 
+                  class="btn btn-secondary"
+                  (click)="goBack()">
+                  <i class="fas fa-arrow-left me-1"></i>
+                  Back
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
-      <!-- Loading/Error -->
-      <div class="row mt-3" *ngIf="error()">
-        <div class="col-12">
-          <div class="alert alert-danger" role="alert">
-            <i class="fas fa-exclamation-triangle me-2"></i>
-            {{error()}}
-            <button 
-              type="button" 
-              class="btn-close float-end" 
-              (click)="error.set('')">
-            </button>
-          </div>
+    </div>
+    
+    <!-- Loading/Error -->
+    <div class="row mt-3" *ngIf="error()">
+      <div class="col-12">
+        <div class="alert alert-danger" role="alert">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          {{error()}}
+          <button 
+            type="button" 
+            class="btn-close float-end" 
+            (click)="error.set('')">
+          </button>
         </div>
       </div>
     </div>
-  `,
+  </div>
+`,
   styles: [`
     .card {
       border: none;
@@ -319,7 +396,11 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
   nearKeypointDistance = signal<number | null>(null);
   countdown = signal<number>(10);
 
-  // Tour ID from route
+  // Novi signali za praćenje ture
+  tourDetails = signal<any | null>(null);
+  currentPosition = signal<Position | null>(null);
+
+  // Tour ID iz route parametra
   tourId: string = '';
 
   // Auto-check interval
@@ -332,8 +413,8 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
   );
   
   getTotalKeypoints = computed(() => {
-    // This would ideally come from tour data, for now use a mock
-    return 5; // Should be fetched from tour details
+    // Uzmi iz tour details umesto hardcoded
+    return this.tourDetails()?.keypoints?.length || 0;
   });
 
   getProgressPercentage = computed(() => {
@@ -349,12 +430,22 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.route.params.subscribe(params => {
-      this.tourId = params['id'];
-      if (this.tourId) {
+    // Čita tourId iz query parametara ili route parametara
+    this.route.queryParams.subscribe(params => {
+      if (params['tourId']) {
+        this.tourId = params['tourId'];
         this.startTour();
       }
     });
+    
+    if (!this.tourId) {
+      this.route.params.subscribe(params => {
+        if (params['id']) {
+          this.tourId = params['id'];
+          this.startTour();
+        }
+      });
+    }
   }
 
   ngOnDestroy(): void {
@@ -362,7 +453,15 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
   }
 
   private startTour(): void {
+    if (!this.tourId) {
+      this.error.set('No tour ID provided');
+      return;
+    }
+
     this.loading.set(true);
+    
+    // DODAJ OVO - učitaj tour details
+    this.loadTourDetails();
     
     this.apiService.startTour(this.tourId).subscribe({
       next: (response: any) => {
@@ -374,18 +473,29 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
       },
       error: (error) => {
         this.loading.set(false);
-        this.error.set(error.error?.error || 'Failed to start tour. Please make sure you have set your position using the Position Simulator.');
+        this.error.set(error.error?.error || 'Failed to start tour.');
       }
     });
   }
 
+  private loadTourDetails(): void {
+    this.apiService.getTourById(this.tourId).subscribe({
+      next: (response) => {
+        this.tourDetails.set(response.tour || response);
+      },
+      error: (error) => {
+        console.warn('Failed to load tour details:', error);
+      }
+    });
+}
+
   private startAutoCheck(): void {
-    // Start auto-checking every 10 seconds
+    // Počni auto-checking svakih 10 sekundi
     this.autoCheckInterval = setInterval(() => {
       this.checkPosition();
     }, 10000);
 
-    // Start countdown timer
+    // Počni countdown timer
     this.startCountdown();
   }
 
@@ -426,18 +536,23 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
         this.loading.set(false);
         this.execution.set(response.tour_execution);
 
+        // Ažuriraj trenutnu poziciju
+        if (response.tour_execution.current_position) {
+          this.currentPosition.set(response.tour_execution.current_position as Position);
+        }
+
         if (response.near_keypoint) {
           this.nearKeypoint.set(true);
           this.nearKeypointName.set(response.keypoint_name || '');
           this.nearKeypointDistance.set(response.distance_to_keypoint || null);
 
-          // Clear the near keypoint notification after 5 seconds
+          // Obriši obaveštenje nakon 5 sekundi
           setTimeout(() => {
             this.nearKeypoint.set(false);
           }, 5000);
         }
 
-        // Stop auto-check if tour is completed or abandoned
+        // Zaustavi auto-check ako je tura završena ili napuštena
         if (response.tour_execution.status !== 'active') {
           this.stopAutoCheck();
         }
@@ -465,7 +580,7 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
         this.loading.set(false);
         this.stopAutoCheck();
         
-        // Update execution status
+        // Ažuriraj execution status
         const updatedExecution = { ...this.execution()! };
         updatedExecution.status = 'abandoned';
         updatedExecution.abandoned_at = new Date();
@@ -543,6 +658,24 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
     }
   }
 
+  formatDuration(startDate: Date | string): string {
+    try {
+      const start = new Date(startDate);
+      const now = new Date();
+      const diffMs = now.getTime() - start.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      
+      if (diffMins < 1) return 'Just started';
+      if (diffMins < 60) return `${diffMins} min`;
+      
+      const hours = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      return `${hours}h ${mins}min`;
+    } catch {
+      return 'Unknown';
+    }
+  }
+
   // Navigation methods
   goToPositionSimulator(): void {
     this.router.navigate(['/position-simulator']);
@@ -550,6 +683,12 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
 
   goToTours(): void {
     this.router.navigate(['/tours']);
+  }
+
+  goToTourDetail(): void {
+    if (this.tourId) {
+      this.router.navigate(['/tours', this.tourId]);
+    }
   }
 
   goBack(): void {

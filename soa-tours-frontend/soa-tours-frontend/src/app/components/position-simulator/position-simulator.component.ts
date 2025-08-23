@@ -1,6 +1,6 @@
 import { Component, OnInit, signal, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import * as L from 'leaflet';
 
@@ -15,7 +15,7 @@ interface Position {
 @Component({
   selector: 'app-position-simulator',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   template: `
     <div class="container-fluid">
       <div class="row">
@@ -76,9 +76,143 @@ interface Position {
                   </div>
                 </div>
               </div>
+
+              <!-- Active Tour Integration Section - NOVO! -->
+              <div class="row mb-4" *ngIf="activeTour()">
+                <div class="col-12">
+                  <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                      <h5 class="mb-0">
+                        <i class="fas fa-route me-2"></i>
+                        Active Tour Integration
+                      </h5>
+                    </div>
+                    <div class="card-body">
+                      <div class="row">
+                        <div class="col-md-8">
+                          <h6 class="text-primary">Tour in Progress</h6>
+                          <p class="mb-2">
+                            <strong>Status:</strong> 
+                            <span class="badge bg-primary ms-1">{{activeTour()!.status | titlecase}}</span>
+                          </p>
+                          <p class="mb-2">
+                            <strong>Progress:</strong> 
+                            {{activeTour()!.completed_keypoints?.length || 0}} keypoints completed
+                          </p>
+                          <p class="mb-3">
+                            <strong>Started:</strong> 
+                            {{activeTour()!.started_at | date:'medium'}}
+                          </p>
+
+                          <!-- Nearby Keypoints -->
+                          <div *ngIf="nearbyKeypoints().length > 0" class="mb-3">
+                            <h6 class="text-success">
+                              <i class="fas fa-map-marker-alt me-1"></i>
+                              Nearby Keypoints (within 100m)
+                            </h6>
+                            <div class="row">
+                              <div class="col-md-6 mb-2" *ngFor="let keypoint of nearbyKeypoints()">
+                                <div class="card border-success">
+                                  <div class="card-body py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                      <div>
+                                        <h6 class="mb-1">{{keypoint.name}}</h6>
+                                        <small class="text-muted">
+                                          {{keypoint.distance | number:'1.0-0'}}m away
+                                        </small>
+                                      </div>
+                                      <button 
+                                        class="btn btn-sm btn-success"
+                                        (click)="moveToKeypoint(keypoint)"
+                                        [disabled]="loading()">
+                                        <i class="fas fa-location-arrow me-1"></i>
+                                        Go Here
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div *ngIf="nearbyKeypoints().length === 0" class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            No keypoints nearby. Move closer to discover tour keypoints.
+                          </div>
+                        </div>
+
+                        <div class="col-md-4">
+                          <div class="d-grid gap-2">
+                            <button 
+                              class="btn btn-warning"
+                              (click)="simulateTourProgress()"
+                              [disabled]="loading()">
+                              <i class="fas fa-fast-forward me-2"></i>
+                              Quick Progress
+                            </button>
+                            
+                            <button 
+                              class="btn btn-outline-primary"
+                              routerLink="/tour-execution">
+                              <i class="fas fa-eye me-2"></i>
+                              View Active Tour
+                            </button>
+                            
+                            <button 
+                              class="btn btn-outline-secondary btn-sm"
+                              (click)="checkActiveTour()">
+                              <i class="fas fa-sync-alt me-1"></i>
+                              Refresh Tour Data
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
               
               <!-- Map Container -->
               <div id="position-map" class="position-map"></div>
+
+              <!-- Tour Simulation Help - NOVO! -->
+              <div class="row mb-4" *ngIf="activeTour()">
+                <div class="col-12">
+                  <div class="card border-info">
+                    <div class="card-header bg-light">
+                      <h6 class="mb-0">
+                        <i class="fas fa-lightbulb me-2 text-warning"></i>
+                        Tour Testing Tips
+                      </h6>
+                    </div>
+                    <div class="card-body">
+                      <div class="row">
+                        <div class="col-md-6">
+                          <h6 class="text-info">How to test tour execution:</h6>
+                          <ol class="small">
+                            <li>Use "Quick Progress" to move to next keypoint automatically</li>
+                            <li>Or manually set coordinates near a keypoint location</li>
+                            <li>Position updates trigger automatic keypoint detection (50m radius)</li>
+                            <li>Check "Active Tour" page to see real-time progress</li>
+                          </ol>
+                        </div>
+                        <div class="col-md-6">
+                          <h6 class="text-success">Auto-checking:</h6>
+                          <p class="small mb-2">
+                            The active tour automatically checks your position every 10 seconds to detect when you're near keypoints.
+                          </p>
+                          <div class="alert alert-info py-2">
+                            <small>
+                              <i class="fas fa-info-circle me-1"></i>
+                              Keypoints are detected within 50 meters of your position.
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
               
               <!-- Instructions -->
               <div class="p-3 bg-info bg-opacity-10 border-top">
@@ -176,11 +310,15 @@ interface Position {
   `]
 })
 export class PositionSimulatorComponent implements OnInit, AfterViewInit {
-  // Signals for reactive state
+  // Postojeći signali
   currentPosition = signal<Position | null>(null);
   loading = signal<boolean>(false);
   loadingMessage = signal<string>('');
   error = signal<string>('');
+
+  // NOVI signali za tour integration
+  activeTour = signal<any | null>(null);
+  nearbyKeypoints = signal<any[]>([]);
 
   // Leaflet map and marker
   private map: L.Map | null = null;
@@ -190,6 +328,20 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
   private defaultLat = 44.8176;
   private defaultLng = 20.4633;
 
+  // Mock koordinate - dodaj još lokacija
+  mockLocations = [
+    { name: 'Belgrade Center', lat: 44.7866, lng: 20.4489 },
+    { name: 'Novi Sad Center', lat: 45.2671, lng: 19.8335 },
+    { name: 'Niš Center', lat: 43.3209, lng: 21.8958 },
+    { name: 'Kragujevac Center', lat: 44.0165, lng: 20.9114 },
+    { name: 'Subotica Center', lat: 46.0996, lng: 19.6675 },
+    { name: 'Kalemegdan Park', lat: 44.8206, lng: 20.4513 },
+    { name: 'Skadarlija', lat: 44.8167, lng: 20.4598 },
+    { name: 'Zemun Quay', lat: 44.8431, lng: 20.4014 },
+    { name: 'Ada Ciganlija', lat: 44.7894, lng: 20.4070 },
+    { name: 'Avala Tower', lat: 44.6934, lng: 20.5142 }
+  ];
+
   constructor(
     private apiService: ApiService,
     private router: Router
@@ -197,6 +349,7 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.loadCurrentPosition();
+    this.checkActiveTour();
   }
 
   ngAfterViewInit(): void {
@@ -206,6 +359,157 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
     }, 100);
   }
 
+  // NOVA METODA: Provjeri aktivnu turu
+  checkActiveTour(): void {
+    this.apiService.getUserExecutions().subscribe({
+      next: (response) => {
+        // Dodaj null check
+        const executions = response?.executions || [];
+        const activeTour = executions.find(exec => exec.status === 'active');
+        this.activeTour.set(activeTour || null);
+        
+        if (activeTour) {
+          this.loadTourKeypoints(activeTour.tour_id);
+        }
+      },
+      error: () => {
+        this.activeTour.set(null);
+      }
+    });
+  }
+
+  // NOVA METODA: Učitaj keypoints aktivne ture
+  private loadTourKeypoints(tourId: string): void {
+    this.apiService.getTourById(tourId).subscribe({
+      next: (response) => {
+        const tour = response.tour || response;
+        if (tour.keypoints) {
+          this.checkNearbyKeypoints(tour.keypoints);
+        }
+      },
+      error: (error) => {
+        console.warn('Failed to load tour keypoints:', error);
+      }
+    });
+  }
+
+  // NOVA METODA: Provjeri bliske ključne tačke
+  private checkNearbyKeypoints(keypoints: any[]): void {
+    const currentPos = this.currentPosition();
+    if (!currentPos || !keypoints) {
+      this.nearbyKeypoints.set([]);
+      return;
+    }
+
+    const nearby = keypoints.filter(keypoint => {
+      const distance = this.calculateDistance(
+        currentPos.latitude, 
+        currentPos.longitude,
+        keypoint.latitude, 
+        keypoint.longitude
+      );
+      return distance <= 0.1; // 100 meters
+    }).map(keypoint => ({
+      ...keypoint,
+      distance: this.calculateDistance(
+        currentPos.latitude, 
+        currentPos.longitude,
+        keypoint.latitude, 
+        keypoint.longitude
+      ) * 1000 // Convert to meters
+    }));
+
+    this.nearbyKeypoints.set(nearby);
+  }
+
+  // NOVA METODA: Postavi poziciju na keypoint
+  moveToKeypoint(keypoint: any): void {
+    const positionData = {
+      latitude: keypoint.latitude + (Math.random() - 0.5) * 0.0001, // Small random offset
+      longitude: keypoint.longitude + (Math.random() - 0.5) * 0.0001,
+      accuracy: 10
+    };
+
+    this.updatePosition(positionData);
+  }
+
+  // NOVA METODA: Quick action za test scenarije
+  simulateTourProgress(): void {
+  const tour = this.activeTour();
+  if (!tour) {
+    alert('No active tour found. Please start a tour first.');
+    return;
+  }
+
+  this.loading.set(true);
+  this.loadingMessage.set('Moving to next keypoint...');
+  
+  this.apiService.getTourById(tour.tour_id).subscribe({
+    next: (response) => {
+      const tourData = response.tour || response;
+      const keypoints = tourData.keypoints || [];
+      
+      if (keypoints.length === 0) {
+        this.loading.set(false);
+        this.loadingMessage.set('');
+        alert('This tour has no keypoints.');
+        return;
+      }
+
+      // ISPRAVLJENA LOGIKA - koristi keypoint.order umesto kp.order
+      const completedIndices = tour.completed_keypoints?.map((kp: any) => kp.keypoint_index) || [];
+      
+      // Sortiraj keypoints po order i nađi prvi necompletiran
+      const sortedKeypoints = keypoints.sort((a: any, b: any) => a.order - b.order);
+      const nextKeypoint = sortedKeypoints.find((keypoint: any) => !completedIndices.includes(keypoint.order));
+
+      if (nextKeypoint) {
+        this.moveToKeypoint(nextKeypoint);
+        setTimeout(() => {
+          this.loading.set(false);
+          this.loadingMessage.set('');
+          alert(`Moved to keypoint: ${nextKeypoint.name}`);
+        }, 1000);
+      } else {
+        this.loading.set(false);
+        this.loadingMessage.set('');
+        alert('All keypoints completed!');
+      }
+    },
+    error: (error) => {
+      this.loading.set(false);
+      this.loadingMessage.set('');
+      console.error('Failed to load tour data:', error);
+      alert('Failed to load tour data.');
+    }
+  });
+}
+
+  // Helper method for distance calculation
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = this.deg2rad(lat2 - lat1);
+    const dLon = this.deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c;
+    return distance;
+  }
+
+  private deg2rad(deg: number): number {
+    return deg * (Math.PI/180);
+  }
+
+  // AŽURIRANA metoda updatePosition da pozove i setPosition
+  private updatePosition(positionData: any): void {
+    this.setPosition(positionData.latitude, positionData.longitude);
+  }
+
+  // Postojeće metode ostaju iste...
+  
   private initializeMap(): void {
     try {
       // Initialize map centered on Belgrade or user's last position
@@ -274,6 +578,11 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
             timestamp: new Date(response.position.timestamp),
             accuracy: response.position.accuracy
           });
+          
+          // Check nearby keypoints when position loads
+          if (this.activeTour()) {
+            this.loadTourKeypoints(this.activeTour()!.tour_id);
+          }
         }
       },
       error: (error) => {
@@ -313,6 +622,11 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
 
         // Update marker on map
         this.addPositionMarker(latitude, longitude);
+        
+        // Check nearby keypoints after position update
+        if (this.activeTour()) {
+          this.loadTourKeypoints(this.activeTour()!.tour_id);
+        }
         
         // Show success message briefly
         this.loadingMessage.set('Position saved successfully!');

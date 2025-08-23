@@ -19,6 +19,16 @@ type TourExecutionHandler struct {
 	DB *mongo.Database
 }
 
+type PurchaseToken struct {
+	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	UserID      int                `json:"user_id" bson:"user_id"`
+	TourID      string             `json:"tour_id" bson:"tour_id"`
+	Token       string             `json:"token" bson:"token"`
+	PurchasedAt time.Time          `json:"purchased_at" bson:"purchased_at"`
+	ExpiresAt   *time.Time         `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
+	IsActive    bool               `json:"is_active" bson:"is_active"`
+}
+
 type TourExecution struct {
 	ID                  primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
 	UserID              int                   `json:"user_id" bson:"user_id"`
@@ -77,9 +87,16 @@ func (h *TourExecutionHandler) StartTour(c *gin.Context) {
 		return
 	}
 
-	// Check if tour exists
+	// Check if tour exists and get tour details
 	toursCollection := h.DB.Collection("tours")
-	var tour interface{}
+	var tour struct {
+		ID          primitive.ObjectID `bson:"_id"`
+		Name        string             `bson:"name"`
+		AuthorID    int                `bson:"author_id"`
+		Status      string             `bson:"status"`
+		Price       float64            `bson:"price"`
+		Keypoints   []interface{}      `bson:"keypoints"`
+	}
 	err = toursCollection.FindOne(context.TODO(), bson.M{"_id": tourID}).Decode(&tour)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -87,6 +104,63 @@ func (h *TourExecutionHandler) StartTour(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Check if user can start this tour
+	canStart := false
+	purchaseRequired := false
+
+	// Logic for tour access:
+	// 1. User is author - can always start
+	// 2. Tour is draft - only author can start
+	// 3. Tour is archived - can start (but purchase check applies if implemented)
+	// 4. Tour is published - can start (but purchase check applies if implemented)
+
+	if tour.AuthorID == userID {
+		// User is the author - can always start
+		canStart = true
+	} else if tour.Status == "draft" {
+		// Only author can start draft tours
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "This tour is in draft mode and can only be started by the author",
+		})
+		return
+	} else if tour.Status == "published" || tour.Status == "archived" {
+		// For published/archived tours, check if purchase is required
+		// For now, we'll allow starting but note that purchase will be required later
+		canStart = true
+		
+		// TODO: Kada se implementira kupovina, dodaj ovdje provjeru:
+		// if tour.Price > 0 {
+		//     // Check if user has purchased this tour
+		//     purchaseTokensCollection := h.DB.Collection("purchase_tokens")
+		//     var token PurchaseToken
+		//     err := purchaseTokensCollection.FindOne(context.TODO(), bson.M{
+		//         "user_id": userID,
+		//         "tour_id": req.TourID,
+		//         "is_active": true,
+		//     }).Decode(&token)
+		//     
+		//     if err != nil {
+		//         if err == mongo.ErrNoDocuments {
+		//             c.JSON(http.StatusForbidden, gin.H{
+		//                 "error": "You need to purchase this tour before starting it",
+		//                 "purchase_required": true,
+		//             })
+		//             return
+		//         }
+		//         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check purchase status"})
+		//         return
+		//     }
+		// }
+		purchaseRequired = tour.Price > 0 // Mark that purchase will be required in future
+	}
+
+	if !canStart {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "You are not authorized to start this tour",
+		})
 		return
 	}
 
@@ -117,6 +191,7 @@ func (h *TourExecutionHandler) StartTour(c *gin.Context) {
 	if err == nil {
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "You already have an active tour. Please complete or abandon it first.",
+			"existing_execution_id": existingExecution.ID.Hex(),
 		})
 		return
 	}
@@ -140,10 +215,22 @@ func (h *TourExecutionHandler) StartTour(c *gin.Context) {
 
 	execution.ID = result.InsertedID.(primitive.ObjectID)
 
-	c.JSON(http.StatusCreated, gin.H{
+	response := gin.H{
 		"message":        "Tour started successfully",
 		"tour_execution": execution,
-	})
+		"tour_info": gin.H{
+			"name":        tour.Name,
+			"status":      tour.Status,
+			"keypoints":   len(tour.Keypoints),
+			"price":       tour.Price,
+		},
+	}
+
+	if purchaseRequired {
+		response["purchase_note"] = "Note: When purchase system is implemented, this tour will require purchase"
+	}
+
+	c.JSON(http.StatusCreated, response)
 }
 
 // POST /tours/check-keypoints - check if user is near any keypoint

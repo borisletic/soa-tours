@@ -75,9 +75,9 @@ export const routes: Routes = [
     title: 'SOA Tours - Position Simulator'
   },
   { 
-    path: 'tour-execution/:id', 
+    path: 'tour-execution', 
     component: TourExecutionComponent,
-    title: 'SOA Tours - Tour Execution'
+    title: 'SOA Tours - Active Tour'
   },
   {
   path: 'tour-keypoints/:id',

@@ -785,7 +785,7 @@ removeKeypoint(tourId: string, order: number, userId?: number): Observable<any> 
     });
     
     return this.http.put<{message: string}>(
-      `${this.CONTENT_API}/tours/${executionId}/abandon`, 
+      `${this.CONTENT_API}/executions/${executionId}/abandon`, 
       {}, 
       { headers }
     );

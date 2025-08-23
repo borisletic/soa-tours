@@ -75,6 +75,12 @@ import { ApiService } from '../../services/api.service';
               Position Simulator
             </a>
           </li>
+          <li class="nav-item" *ngIf="hasActiveTour()">
+            <a class="nav-link text-warning" routerLink="/tour-execution" routerLinkActive="active">
+              <i class="fas fa-play-circle me-1"></i>Active Tour
+              <span class="badge bg-warning text-dark ms-1">Live</span>
+            </a>
+          </li>
           <li class="nav-item">
             <a class="nav-link text-white" href="/tours">
               <i class="fas fa-route me-1"></i>
@@ -229,6 +235,7 @@ export class NavigationComponent {
   showMobileMenu = signal(false);
   showServicesDropdown = signal(false);
   showUserDropdown = signal(false);
+  hasActiveTour = signal<boolean>(false);
   
   servicesStatus = computed(() => this.apiService.servicesStatus());
   
@@ -254,7 +261,29 @@ export class NavigationComponent {
   constructor(
     private apiService: ApiService,
     private router: Router
-  ) {}
+  ) {
+    // Dodaj ovaj kod direktno u constructor:
+    this.checkActiveTour();
+    
+    // Check every 30 seconds
+    setInterval(() => {
+      this.checkActiveTour();
+    }, 30000);
+  }
+
+  private checkActiveTour(): void {
+    this.apiService.getUserExecutions().subscribe({
+      next: (response) => {
+        // Dodaj null check
+        const executions = response?.executions || [];
+        const activeTour = executions.find(exec => exec.status === 'active');
+        this.hasActiveTour.set(!!activeTour);
+      },
+      error: () => {
+        this.hasActiveTour.set(false);
+      }
+    });
+  }
 
   toggleMobileMenu(): void {
     this.showMobileMenu.update(show => !show);
