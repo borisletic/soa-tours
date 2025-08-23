@@ -170,6 +170,64 @@ export interface AddKeypointRequest {
   images: string[];
 }
 
+// Position/Location interfaces
+export interface PositionData {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+}
+
+export interface Position {
+  user_id: number;
+  latitude: number;
+  longitude: number;
+  timestamp: Date;
+  accuracy?: number;
+}
+
+export interface PositionResponse {
+  message?: string;
+  position?: Position;
+  error?: string;
+}
+
+export interface StartTourRequest {
+  tour_id: string;
+}
+
+export interface TourExecution {
+  id: string;
+  user_id: number;
+  tour_id: string;
+  status: 'active' | 'completed' | 'abandoned';
+  current_position?: {
+    latitude: number;
+    longitude: number;
+    timestamp: Date;
+  };
+  completed_keypoints: CompletedKeypoint[];
+  started_at: Date;
+  completed_at?: Date;
+  abandoned_at?: Date;
+  last_activity: Date;
+}
+
+export interface CompletedKeypoint {
+  keypoint_index: number;
+  completed_at: Date;
+  latitude: number;
+  longitude: number;
+}
+
+export interface CheckKeypointsResponse {
+  near_keypoint: boolean;
+  keypoint_index?: number;
+  keypoint_name?: string;
+  distance_to_keypoint?: number;
+  completed_keypoint?: CompletedKeypoint;
+  tour_execution: TourExecution;
+}
+
 
 @Injectable({
   providedIn: 'root'
@@ -544,5 +602,106 @@ removeKeypoint(tourId: string, order: number, userId?: number): Observable<any> 
     
     // User can comment if they follow the author
     return following.includes(authorId);
+  }
+
+    // Position/Location API calls
+  getCurrentPosition(userId: number): Observable<PositionResponse> {
+    return this.http.get<PositionResponse>(`${this.CONTENT_API}/positions/${userId}`, this.httpOptions);
+  }
+
+  updatePosition(userId: number, positionData: PositionData): Observable<PositionResponse> {
+    return this.http.post<PositionResponse>(`${this.CONTENT_API}/positions/${userId}`, positionData, this.httpOptions);
+  }
+
+  clearPosition(userId: number): Observable<PositionResponse> {
+    return this.http.delete<PositionResponse>(`${this.CONTENT_API}/positions/${userId}`, this.httpOptions);
+  }
+
+  getAllPositions(): Observable<{positions: Position[]}> {
+    return this.http.get<{positions: Position[]}>(`${this.CONTENT_API}/positions`, this.httpOptions);
+  }
+
+  // Position validation helper
+  isValidCoordinates(latitude: number, longitude: number): boolean {
+    return latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+  }
+
+  // Distance calculation helper (Haversine formula)
+  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = this.deg2rad(lat2 - lat1);
+    const dLon = this.deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c; // Distance in kilometers
+    return distance;
+  }
+
+  private deg2rad(deg: number): number {
+    return deg * (Math.PI/180);
+  }
+
+  // Check if user is near a keypoint (within specified radius in meters)
+  isNearKeypoint(userLat: number, userLng: number, keypointLat: number, keypointLng: number, radiusMeters: number = 50): boolean {
+    const distance = this.calculateDistance(userLat, userLng, keypointLat, keypointLng) * 1000; // Convert to meters
+    return distance <= radiusMeters;
+  }
+
+    // Tour Execution API calls
+  startTour(tourId: string): Observable<{message: string, tour_execution: TourExecution}> {
+    const currentUserId = this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-User-ID': currentUserId.toString()
+    });
+    
+    const request: StartTourRequest = { tour_id: tourId };
+    return this.http.post<{message: string, tour_execution: TourExecution}>(
+      `${this.CONTENT_API}/tours/start`, 
+      request, 
+      { headers }
+    );
+  }
+
+  checkKeypoints(): Observable<CheckKeypointsResponse> {
+    const currentUserId = this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-User-ID': currentUserId.toString()
+    });
+    
+    return this.http.post<CheckKeypointsResponse>(
+      `${this.CONTENT_API}/tours/check-keypoints`, 
+      {}, 
+      { headers }
+    );
+  }
+
+  abandonTour(executionId: string): Observable<{message: string}> {
+    const currentUserId = this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    
+    return this.http.put<{message: string}>(
+      `${this.CONTENT_API}/tours/${executionId}/abandon`, 
+      {}, 
+      { headers }
+    );
+  }
+
+  getUserExecutions(): Observable<{executions: TourExecution[], count: number}> {
+    const currentUserId = this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    
+    return this.http.get<{executions: TourExecution[], count: number}>(
+      `${this.CONTENT_API}/tours/executions`, 
+      { headers }
+    );
   }
 }

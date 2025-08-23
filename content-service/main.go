@@ -19,6 +19,7 @@ import (
     "go.mongodb.org/mongo-driver/bson/primitive"
     "content-service/handlers"
     
+    
 )
 
 type Blog struct {
@@ -124,6 +125,22 @@ func main() {
 
     // Tours routes (placeholder for future implementation)
     //router.GET("/tours", getToursPlaceholder)
+
+    positionHandler := handlers.NewPositionHandler(db)
+
+    // Position routes
+    router.GET("/positions", positionHandler.GetAllPositions)
+    router.GET("/positions/:userId", positionHandler.GetUserPosition)
+    router.POST("/positions/:userId", positionHandler.UpdateUserPosition)
+    router.DELETE("/positions/:userId", positionHandler.ClearUserPosition)
+
+    executionHandler := handlers.NewTourExecutionHandler(db)
+
+    // Tour Execution routes
+    router.POST("/tours/start", executionHandler.StartTour)
+    router.POST("/tours/check-keypoints", executionHandler.CheckKeypoints)
+    router.PUT("/executions/:executionId/abandon", executionHandler.AbandonTour)  // ✅ PROMENJENA RUTA
+    router.GET("/tours/executions", executionHandler.GetUserExecutions)
    
 
     port := os.Getenv("PORT")

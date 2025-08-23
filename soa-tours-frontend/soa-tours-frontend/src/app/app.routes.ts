@@ -10,6 +10,8 @@ import { EnhancedBlogsComponent } from './components/enhanced-blogs/enhanced-blo
 import { FollowComponent } from './components/follow/follow.component';
 import { MyToursComponent } from './components/my-tours/my-tours.component';
 import { CreateTourComponent } from './components/create-tour/create-tour.component';
+import { PositionSimulatorComponent } from './components/position-simulator/position-simulator.component';
+import { TourExecutionComponent } from './components/tour-execution/tour-execution.component';
 
 export const routes: Routes = [
   { 
@@ -60,6 +62,16 @@ export const routes: Routes = [
   },
   { path: 'create-tour', component: CreateTourComponent, title: 'Create Tour' },
   { path: 'my-tours', component: MyToursComponent, title: 'My Tours' },
+  { 
+    path: 'position-simulator', 
+    component: PositionSimulatorComponent,
+    title: 'SOA Tours - Position Simulator'
+  },
+  { 
+    path: 'tour-execution/:id', 
+    component: TourExecutionComponent,
+    title: 'SOA Tours - Tour Execution'
+  },
   // WILDCARD RUTA MORA BITI POSLEDNJA:
   { 
     path: '**', 

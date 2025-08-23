@@ -69,6 +69,12 @@ import { ApiService } from '../../services/api.service';
               My Tours
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/position-simulator" routerLinkActive="active">
+              <i class="fas fa-location-arrow me-1"></i>
+              Position Simulator
+            </a>
+          </li>
           </ul>
           
           <ul class="navbar-nav">
