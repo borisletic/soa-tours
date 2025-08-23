@@ -323,6 +323,8 @@ export class TourKeypointsMapComponent implements OnInit, AfterViewInit {
   showKeypointModal = false;
   editingKeypointIndex = -1;
   selectedKeypointIndex = -1;
+
+  returnTo: string | null = null;
   
   currentKeypoint: Partial<Keypoint> = {};
 
@@ -337,16 +339,22 @@ export class TourKeypointsMapComponent implements OnInit, AfterViewInit {
     ) {}
 
   ngOnInit(): void {
-  // Get ":id" from URL (e.g. /tour-keypoints/68a9191d3d98d4c5d9b30789)
-  this.tourId = this.route.snapshot.paramMap.get('id')!;
-  console.log('Tour ID from route:', this.tourId);
+    this.route.paramMap.subscribe(params => {
+      this.tourId = params.get('id') ?? '';
+      console.log('Tour ID from route:', this.tourId);
 
-  if (this.tourId) {
-    this.loadTour();
-  } else {
-    console.error('No tourId found in route!');
+      if (this.tourId) {
+        this.loadTour();
+      } else {
+        console.error('No tourId found in route!');
+      }
+    });
+
+    // ✅ FIX: Check where we came from
+    this.route.queryParams.subscribe(params => {
+      this.returnTo = params['returnTo'] || null;
+    });
   }
-}
 
   ngAfterViewInit(): void {
     setTimeout(() => {
@@ -633,8 +641,14 @@ export class TourKeypointsMapComponent implements OnInit, AfterViewInit {
   }
 
   goBack(): void {
-    if (this.tour) {
-      // Go back to that tour’s detail page
+    if (this.returnTo === 'create-tour' && this.tour) {
+      // Go back to create-tour page - we need to navigate differently
+      // Since create-tour doesn't have a route with ID, we'll use a different approach
+      this.router.navigate(['/create-tour'], {
+        queryParams: { tourId: this.tour.id }
+      });
+    } else if (this.tour) {
+      // Default behavior - go to tour detail page
       this.router.navigate(['/tours', this.tour.id]);
     } else {
       // Fallback: go to tours list

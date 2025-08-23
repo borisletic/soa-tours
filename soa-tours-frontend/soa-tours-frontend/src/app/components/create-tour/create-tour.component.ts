@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 
 interface TransportTime {
@@ -473,10 +473,39 @@ export class CreateTourComponent implements OnInit {
 
   constructor(
     private apiService: ApiService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute  // ✅ Add this
   ) {}
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    // ✅ FIX: Check if we're returning from keypoints page
+    this.route.queryParams.subscribe(params => {
+      const tourId = params['tourId'];
+      if (tourId && !this.createdTour) {
+        // We're returning from keypoints, load the tour
+        this.loadExistingTour(tourId);
+      }
+    });
+  }
+
+  private loadExistingTour(tourId: string): void {
+    this.apiService.getTourById(tourId).subscribe({
+      next: (data: any) => {
+        if (data.tour) {
+          this.createdTour = data.tour;
+          // Clear the query parameter
+          this.router.navigate([], {
+            relativeTo: this.route,
+            queryParams: {},
+            replaceUrl: true
+          });
+        }
+      },
+      error: (error) => {
+        console.error('Failed to load tour:', error);
+      }
+    });
+  }
 
   updateTags(): void {
     if (this.tagsInput.trim()) {
@@ -518,7 +547,10 @@ export class CreateTourComponent implements OnInit {
 
   openKeypointsMap(): void {
     if (this.createdTour) {
-      this.router.navigate(['/tour-keypoints', this.createdTour.id]);
+      // ✅ FIX: Add query parameter to indicate source
+      this.router.navigate(['/tour-keypoints', this.createdTour.id], {
+        queryParams: { returnTo: 'create-tour' }
+      });
     }
   }
 
