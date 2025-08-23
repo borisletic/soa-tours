@@ -17,6 +17,12 @@ interface Tour {
   keypoints: any[];
   created_at: string;
   updated_at: string;
+  transport_times: TransportTime[];
+}
+
+interface TransportTime {
+  transport_type: 'walking' | 'bicycle' | 'car';
+  duration_minutes: number;
 }
 
 @Component({
@@ -156,13 +162,43 @@ interface Tour {
                   <span *ngIf="tour.tags.length === 0" class="text-muted">No tags</span>
                 </div>
               </div>
+
               
+            </div>
+            <div>
               <div class="col-md-4">
                 <div class="text-end">
                   <p><strong>Price:</strong> {{tour.price}}</p>
                   <p><strong>Distance:</strong> {{tour.distance_km}} km</p>
                   <p><strong>Keypoints:</strong> {{tour.keypoints.length}}</p>
                 </div>
+              </div>
+            </div>
+
+            <div class="transport-times" *ngIf="tour.transport_times && tour.transport_times.length > 0">
+              <h6><i class="fas fa-clock me-2"></i>Transport Times:</h6>
+              <div class="row">
+                <div class="col-md-4" *ngFor="let tt of tour.transport_times">
+                  <div class="transport-time-card">
+                    <i class="fas" [class]="getTransportIcon(tt.transport_type)"></i>
+                    <span class="transport-type">{{getTransportLabel(tt.transport_type)}}</span>
+                    <span class="duration">{{tt.duration_minutes}} min</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ✅ PUBLISHING STATUS ALERT -->
+            <div *ngIf="tour.status === 'draft'" class="mt-3">
+              <div class="alert" [class]="canPublishTour(tour) ? 'alert-success' : 'alert-warning'">
+                <i class="fas" [class]="canPublishTour(tour) ? 'fa-check-circle' : 'fa-exclamation-triangle'"></i>
+                <strong>Publishing Status:</strong>
+                <span *ngIf="canPublishTour(tour)">Ready to publish!</span>
+                <span *ngIf="!canPublishTour(tour)">Missing requirements for publishing</span>
+                
+                <ul class="mb-0 mt-2" *ngIf="!canPublishTour(tour)">
+                  <li *ngFor="let req of getMissingRequirements(tour)" [innerHTML]="req"></li>
+                </ul>
               </div>
             </div>
 
@@ -316,23 +352,41 @@ export class MyToursComponent implements OnInit {
   }
 
   updateTourStatus(tour: Tour, status: string): void {
-    this.loading = true;
-    
-    this.apiService.updateTour(tour.id, { status: status as 'draft' | 'published' | 'archived' }).subscribe({
-      next: (data: any) => {
-        this.response = data;
-        this.loading = false;
-        if (data.message) {
-          // Refresh tours list
-          this.loadTours();
-        }
-      },
-      error: (error) => {
-        this.response = { error: error.message };
-        this.loading = false;
-      }
-    });
+  // ✅ DODANA VALIDACIJA ZA PUBLISHING
+  if (status === 'published' && !this.canPublishTour(tour)) {
+    const missing = this.getMissingRequirements(tour);
+    alert(`Cannot publish tour. Missing requirements:\n${missing.join('\n')}`);
+    return;
   }
+
+  if (status === 'published' && !confirm('Are you sure you want to publish this tour? It will be visible to all users.')) {
+    return;
+  }
+
+  if (status === 'archived' && !confirm('Are you sure you want to archive this tour? It will be hidden from users.')) {
+    return;
+  }
+
+  this.loading = true;
+  
+  this.apiService.updateTour(tour.id, { status: status as 'draft' | 'published' | 'archived' }).subscribe({
+    next: (data: any) => {
+      this.response = data;
+      this.loading = false;
+      if (data.message) {
+        // Refresh tours list
+        this.loadTours();
+      } else if (data.error) {
+        alert('Error: ' + data.error);
+      }
+    },
+    error: (error) => {
+      this.response = { error: error.error || error.message };
+      this.loading = false;
+      alert('Failed to update tour status: ' + (error.error?.error || error.message));
+    }
+  });
+}
 
   getKeypointsPreview(tour: Tour): any[] {
     return tour.keypoints.slice(0, 3);
@@ -345,5 +399,87 @@ export class MyToursComponent implements OnInit {
   formatDate(dateString: string): string {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString();
+  }
+
+  addTransportTime(tour: Tour, transportType: string, duration: number): void {
+    if (!tour.transport_times) {
+      tour.transport_times = [];
+    }
+    
+    // Proveri da li već postoji za ovaj tip
+    const existingIndex = tour.transport_times.findIndex(tt => tt.transport_type === transportType);
+    
+    if (existingIndex >= 0) {
+      // Update postojeći
+      tour.transport_times[existingIndex].duration_minutes = duration;
+    } else {
+      // Dodaj novi
+      tour.transport_times.push({
+        transport_type: transportType as 'walking' | 'bicycle' | 'car',
+        duration_minutes: duration
+      });
+    }
+    
+    // Sačuvaj promene
+    this.updateTourStatus(tour, tour.status);
+  }
+
+  getTransportIcon(type: string): string {
+    const icons = {
+      walking: 'fa-walking',
+      bicycle: 'fa-bicycle', 
+      car: 'fa-car'
+    };
+    return icons[type as keyof typeof icons] || 'fa-question';
+  }
+
+  getTransportLabel(type: string): string {
+    const labels = {
+      walking: 'Walking',
+      bicycle: 'Bicycle',
+      car: 'Car'
+    };
+    return labels[type as keyof typeof labels] || type;
+  }
+
+  canPublishTour(tour: Tour): boolean {
+  return this.hasBasicInfo(tour) && 
+         this.hasMinimumKeypoints(tour) && 
+         this.hasTransportTimes(tour);
+}
+
+hasBasicInfo(tour: Tour): boolean {
+  return !!(tour.name && 
+           tour.description && 
+           tour.difficulty && 
+           tour.tags?.length > 0);
+}
+
+hasMinimumKeypoints(tour: Tour): boolean {
+  return (tour.keypoints?.length || 0) >= 2;
+}
+
+hasTransportTimes(tour: Tour): boolean {
+  return (tour.transport_times?.length || 0) > 0;
+}
+
+getMissingRequirements(tour: Tour): string[] {
+    const missing: string[] = [];
+    
+    if (!this.hasBasicInfo(tour)) {
+      missing.push('- Basic information (name, description, difficulty, tags)');
+    }
+    if (!this.hasMinimumKeypoints(tour)) {
+      missing.push('- At least 2 keypoints');
+    }
+    if (!this.hasTransportTimes(tour)) {
+      missing.push('- At least one transport time');
+    }
+    
+    return missing;
+  }
+
+  manageKeypoints(tour: Tour): void {
+    this.router.navigate(['/tour-keypoints', tour.id]);
   }
 }

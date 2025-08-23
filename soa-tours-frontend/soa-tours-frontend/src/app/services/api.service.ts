@@ -228,6 +228,22 @@ export interface CheckKeypointsResponse {
   tour_execution: TourExecution;
 }
 
+export interface UpdateTourRequest {
+  name?: string;
+  description?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  price?: number;
+  distance_km?: number;
+  tags?: string[];
+  status?: 'draft' | 'published' | 'archived';
+  transport_times?: TransportTime[];
+}
+
+export interface TransportTime {
+  transport_type: 'walking' | 'bicycle' | 'car';
+  duration_minutes: number;
+}
+
 
 @Injectable({
   providedIn: 'root'
@@ -703,5 +719,43 @@ removeKeypoint(tourId: string, order: number, userId?: number): Observable<any> 
       `${this.CONTENT_API}/tours/executions`, 
       { headers }
     );
+  }
+
+  // Dodajte ove metode u src/app/services/api.service.ts:
+
+// Keypoint Management API calls
+updateKeypoint(tourId: string, keypointOrder: number, data: AddKeypointRequest, userId?: number): Observable<any> {
+    const currentUserId = userId || this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.put(`${this.CONTENT_API}/tours/${tourId}/keypoints/${keypointOrder}`, data, { headers });
+  }
+
+// Clear all keypoints (bonus method)
+clearAllKeypoints(tourId: string, userId?: number): Observable<any> {
+    const currentUserId = userId || this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.delete(`${this.CONTENT_API}/tours/${tourId}/keypoints`, { headers });
+  }
+
+addTransportTime(tourId: string, transportTime: TransportTime, userId?: number): Observable<any> {
+    const currentUserId = userId || this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.post(`${this.CONTENT_API}/tours/${tourId}/transport-times`, transportTime, { headers });
+  }
+
+removeTransportTime(tourId: string, transportType: string, userId?: number): Observable<any> {
+    const currentUserId = userId || this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.delete(`${this.CONTENT_API}/tours/${tourId}/transport-times/${transportType}`, { headers });
   }
 }

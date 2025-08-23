@@ -15,21 +15,22 @@ type Keypoint struct {
 }
 
 type Tour struct {
-    ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-    Name        string            `bson:"name" json:"name"`
-    Description string            `bson:"description" json:"description"`
-    AuthorID    int               `bson:"author_id" json:"author_id"`
-    Status      string            `bson:"status" json:"status"` // draft, published, archived
-    Difficulty  string            `bson:"difficulty" json:"difficulty"` // easy, medium, hard
-    Price       float64           `bson:"price" json:"price"`
-    DistanceKm  float64           `bson:"distance_km" json:"distance_km"`
-    Tags        []string          `bson:"tags" json:"tags"`
-    Keypoints   []Keypoint        `bson:"keypoints" json:"keypoints"`
-    Reviews     []Review          `bson:"reviews" json:"reviews"`
-    CreatedAt   time.Time         `bson:"created_at" json:"created_at"`
-    UpdatedAt   time.Time         `bson:"updated_at" json:"updated_at"`
-    PublishedAt *time.Time        `bson:"published_at,omitempty" json:"published_at,omitempty"`
-    ArchivedAt  *time.Time        `bson:"archived_at,omitempty" json:"archived_at,omitempty"`
+    ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+    Name           string            `bson:"name" json:"name"`
+    Description    string            `bson:"description" json:"description"`
+    AuthorID       int               `bson:"author_id" json:"author_id"`
+    Status         string            `bson:"status" json:"status"` // draft, published, archived
+    Difficulty     string            `bson:"difficulty" json:"difficulty"` // easy, medium, hard
+    Price          float64           `bson:"price" json:"price"`
+    DistanceKm     float64           `bson:"distance_km" json:"distance_km"`
+    Tags           []string          `bson:"tags" json:"tags"`
+    Keypoints      []Keypoint        `bson:"keypoints" json:"keypoints"`
+    TransportTimes []TransportTime   `bson:"transport_times" json:"transport_times"` // ✅ DODANO
+    Reviews        []Review          `bson:"reviews" json:"reviews"`
+    CreatedAt      time.Time         `bson:"created_at" json:"created_at"`
+    UpdatedAt      time.Time         `bson:"updated_at" json:"updated_at"`
+    PublishedAt    *time.Time        `bson:"published_at,omitempty" json:"published_at,omitempty"`
+    ArchivedAt     *time.Time        `bson:"archived_at,omitempty" json:"archived_at,omitempty"`
 }
 
 type Review struct {
@@ -74,3 +75,9 @@ type UpdateKeypointRequest struct {
     Images      []string `json:"images"`
     Order       int      `json:"order" binding:"min=0"`
 }
+
+type TransportTime struct {
+    TransportType   string `bson:"transport_type" json:"transport_type"` // walking, bicycle, car
+    DurationMinutes int    `bson:"duration_minutes" json:"duration_minutes"`
+}
+

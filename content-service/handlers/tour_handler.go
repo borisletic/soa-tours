@@ -5,6 +5,7 @@ import (
     "net/http"
     "strconv"
     "time"
+    "errors"
 
     "content-service/models"
     "github.com/gin-gonic/gin"
@@ -128,6 +129,47 @@ func (h *TourHandler) CreateTour(c *gin.Context) {
     })
 }
 
+func (h *TourHandler) validateTourForPublishing(tour *models.Tour) error {
+    // 1. Prover osnovne podatke
+    if tour.Name == "" || tour.Description == "" || tour.Difficulty == "" || len(tour.Tags) == 0 {
+        return errors.New("missing basic tour information (name, description, difficulty, tags)")
+    }
+
+    // 2. Proveri minimum 2 ključne tačke
+    if len(tour.Keypoints) < 2 {
+        return errors.New("tour must have at least 2 keypoints")
+    }
+
+    // 3. Proveri da li postoji bar jedno vreme transport-a
+    if len(tour.TransportTimes) == 0 {
+        return errors.New("tour must have at least one transport time defined")
+    }
+
+    // Validacija transport types
+    validTransports := map[string]bool{
+        "walking":  true,
+        "bicycle":  true,
+        "car":      true,
+    }
+
+    hasValidTransport := false
+    for _, tt := range tour.TransportTimes {
+        if !validTransports[tt.TransportType] {
+            return errors.New("invalid transport type: " + tt.TransportType)
+        }
+        if tt.DurationMinutes <= 0 {
+            return errors.New("transport duration must be positive")
+        }
+        hasValidTransport = true
+    }
+
+    if !hasValidTransport {
+        return errors.New("no valid transport times defined")
+    }
+
+    return nil
+}
+
 // PUT /tours/:id - update tour
 func (h *TourHandler) UpdateTour(c *gin.Context) {
     userID := getUserID(c)
@@ -163,6 +205,18 @@ func (h *TourHandler) UpdateTour(c *gin.Context) {
         return
     }
 
+    // ✅ VALIDACIJA ZA PUBLIKOVANJE (Funkcionalnost 15)
+    if req.Status == "published" && tour.Status != "published" {
+        // Proveri da li tura može da se objavi
+        if err := h.validateTourForPublishing(&tour); err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{
+                "error": "Cannot publish tour: " + err.Error(),
+                "details": "Tour must have basic info, at least 2 keypoints, and transport times",
+            })
+            return
+        }
+    }
+
     // Build update document
     updateDoc := bson.M{
         "updated_at": time.Now(),
@@ -186,15 +240,24 @@ func (h *TourHandler) UpdateTour(c *gin.Context) {
     if req.Tags != nil {
         updateDoc["tags"] = req.Tags
     }
+    
+    // ✅ STATUS HANDLING SA TIMESTAMP-OVIMA
     if req.Status != "" {
         updateDoc["status"] = req.Status
+        
         if req.Status == "published" && tour.PublishedAt == nil {
             now := time.Now()
             updateDoc["published_at"] = now
         }
+        
         if req.Status == "archived" && tour.ArchivedAt == nil {
             now := time.Now()
             updateDoc["archived_at"] = now
+        }
+        
+        // Ako se vraća iz archived u published, ukloni archived_at
+        if req.Status == "published" && tour.Status == "archived" {
+            updateDoc["archived_at"] = nil
         }
     }
 
@@ -208,7 +271,10 @@ func (h *TourHandler) UpdateTour(c *gin.Context) {
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"message": "Tour updated successfully"})
+    c.JSON(http.StatusOK, gin.H{
+        "message": "Tour updated successfully",
+        "status": req.Status,
+    })
 }
 
 // POST /tours/:id/keypoints - add keypoint to tour
@@ -438,4 +504,179 @@ func getUserID(c *gin.Context) int {
         }
     }
     return 1 // Default mock user
+}
+
+func (h *TourHandler) ClearAllKeypoints(c *gin.Context) {
+    userID := getUserID(c)
+    idStr := c.Param("id")
+    objectID, err := primitive.ObjectIDFromHex(idStr)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tour ID"})
+        return
+    }
+
+    collection := h.DB.Collection("tours")
+    
+    // Check if tour exists and user is author
+    var tour models.Tour
+    err = collection.FindOne(context.TODO(), bson.M{"_id": objectID}).Decode(&tour)
+    if err != nil {
+        if err == mongo.ErrNoDocuments {
+            c.JSON(http.StatusNotFound, gin.H{"error": "Tour not found"})
+            return
+        }
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+
+    if tour.AuthorID != userID {
+        c.JSON(http.StatusForbidden, gin.H{"error": "You can only modify your own tours"})
+        return
+    }
+
+    // Clear all keypoints
+    _, err = collection.UpdateOne(
+        context.TODO(),
+        bson.M{"_id": objectID},
+        bson.M{
+            "$set": bson.M{
+                "keypoints": []models.Keypoint{},
+                "distance_km": 0.0,
+                "updated_at": time.Now(),
+            },
+        },
+    )
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear keypoints"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "All keypoints cleared successfully"})
+}
+
+// POST /tours/:id/transport-times - add transport time
+func (h *TourHandler) AddTransportTime(c *gin.Context) {
+    userID := getUserID(c)
+    idStr := c.Param("id")
+    objectID, err := primitive.ObjectIDFromHex(idStr)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tour ID"})
+        return
+    }
+
+    var req struct {
+        TransportType   string `json:"transport_type" binding:"required,oneof=walking bicycle car"`
+        DurationMinutes int    `json:"duration_minutes" binding:"required,min=1"`
+    }
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    collection := h.DB.Collection("tours")
+    
+    // Check if tour exists and user is author
+    var tour models.Tour
+    err = collection.FindOne(context.TODO(), bson.M{"_id": objectID}).Decode(&tour)
+    if err != nil {
+        if err == mongo.ErrNoDocuments {
+            c.JSON(http.StatusNotFound, gin.H{"error": "Tour not found"})
+            return
+        }
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+
+    if tour.AuthorID != userID {
+        c.JSON(http.StatusForbidden, gin.H{"error": "You can only modify your own tours"})
+        return
+    }
+
+    // Add or update transport time
+    transportTime := models.TransportTime{
+        TransportType:   req.TransportType,
+        DurationMinutes: req.DurationMinutes,
+    }
+
+    // Remove existing transport time for this type and add new one
+    _, err = collection.UpdateOne(
+        context.TODO(),
+        bson.M{"_id": objectID},
+        bson.M{
+            "$pull": bson.M{"transport_times": bson.M{"transport_type": req.TransportType}},
+        },
+    )
+
+    _, err = collection.UpdateOne(
+        context.TODO(),
+        bson.M{"_id": objectID},
+        bson.M{
+            "$push": bson.M{"transport_times": transportTime},
+            "$set": bson.M{"updated_at": time.Now()},
+        },
+    )
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add transport time"})
+        return
+    }
+
+    c.JSON(http.StatusCreated, gin.H{
+        "message": "Transport time added successfully",
+        "transport_time": transportTime,
+    })
+}
+
+// DELETE /tours/:id/transport-times/:type - remove transport time
+func (h *TourHandler) RemoveTransportTime(c *gin.Context) {
+    userID := getUserID(c)
+    idStr := c.Param("id")
+    transportType := c.Param("type")
+    
+    objectID, err := primitive.ObjectIDFromHex(idStr)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tour ID"})
+        return
+    }
+
+    // Validate transport type
+    validTypes := map[string]bool{"walking": true, "bicycle": true, "car": true}
+    if !validTypes[transportType] {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid transport type"})
+        return
+    }
+
+    collection := h.DB.Collection("tours")
+    
+    // Check if tour exists and user is author
+    var tour models.Tour
+    err = collection.FindOne(context.TODO(), bson.M{"_id": objectID}).Decode(&tour)
+    if err != nil {
+        if err == mongo.ErrNoDocuments {
+            c.JSON(http.StatusNotFound, gin.H{"error": "Tour not found"})
+            return
+        }
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+
+    if tour.AuthorID != userID {
+        c.JSON(http.StatusForbidden, gin.H{"error": "You can only modify your own tours"})
+        return
+    }
+
+    // Remove transport time
+    _, err = collection.UpdateOne(
+        context.TODO(),
+        bson.M{"_id": objectID},
+        bson.M{
+            "$pull": bson.M{"transport_times": bson.M{"transport_type": transportType}},
+            "$set": bson.M{"updated_at": time.Now()},
+        },
+    )
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove transport time"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "Transport time removed successfully"})
 }

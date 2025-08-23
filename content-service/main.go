@@ -123,6 +123,10 @@ func main() {
     router.PUT("/tours/:id/keypoints/:order", AuthMiddleware(), tourHandler.UpdateKeypoint)
     router.DELETE("/tours/:id/keypoints/:order", AuthMiddleware(), tourHandler.RemoveKeypoint)
 
+    router.DELETE("/tours/:id/keypoints", AuthMiddleware(), tourHandler.ClearAllKeypoints)
+    router.POST("/tours/:id/transport-times", AuthMiddleware(), tourHandler.AddTransportTime)
+    router.DELETE("/tours/:id/transport-times/:type", AuthMiddleware(), tourHandler.RemoveTransportTime)
+
     // Tours routes (placeholder for future implementation)
     //router.GET("/tours", getToursPlaceholder)
 
