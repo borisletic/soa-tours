@@ -143,11 +143,11 @@ import { ApiService, Tour, TourPurchaseInfo } from '../../services/api.service';
                     <small class="text-muted">Keypoints</small>
                   </div>
                   <div class="col-md-3 mb-3">
-                    <div class="h4 text-warning">{{tour()!.reviews?.length || 0}}</div>
+                    <div class="h4 text-warning">{{tour()!.reviews.length || 0}}</div>
                     <small class="text-muted">Reviews</small>
                   </div>
                   <div class="col-md-3 mb-3">
-                    <div class="h4 text-info">{{tour()!.tags?.length || 0}}</div>
+                    <div class="h4 text-info">{{tour()!.tags.length || 0}}</div>
                     <small class="text-muted">Tags</small>
                   </div>
                 </div>

@@ -17,6 +17,8 @@ import { CartComponent } from './components/cart/cart.component';
 import { PurchasesComponent } from './components/purchases/purchases.component';
 import { ToursComponent } from './components/tours/tours.component';
 import { TourDetailComponent } from './components/tour-detail/tour-detail.component';
+import { EditTourComponent } from './components/edit-tour/edit-tour.component';
+
 
 export const routes: Routes = [
   { 
@@ -86,6 +88,7 @@ export const routes: Routes = [
   { path: 'tours/:id', component: TourDetailComponent },
   { path: 'cart', component: CartComponent },
   { path: 'purchases', component: PurchasesComponent },
+  { path: 'edit-tour/:id', component: EditTourComponent, title: 'Edit Tour' },
   // WILDCARD RUTA MORA BITI POSLEDNJA:
   { 
     path: '**', 

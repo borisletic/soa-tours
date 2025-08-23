@@ -44,6 +44,26 @@ interface TransportTime {
             </div>
           </div>
           
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Price (€) *</label>
+              <div class="input-group">
+                <span class="input-group-text">€</span>
+                <input 
+                  type="number" 
+                  class="form-control" 
+                  [(ngModel)]="tourData.price"
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01">
+              </div>
+              <small class="text-muted">Set the tour price. Free tours can be set to €0.00</small>
+            </div>
+            <div class="col-md-6 mb-3">
+              <!-- Empty column for layout balance -->
+            </div>
+          </div>
+
           <div class="mb-3">
             <label class="form-label">Description *</label>
             <textarea 
@@ -461,6 +481,7 @@ export class CreateTourComponent implements OnInit {
     name: '',
     description: '',
     difficulty: '',
+    price: 0, // ADD THIS
     tags: [] as string[]
   };
 
@@ -519,8 +540,8 @@ export class CreateTourComponent implements OnInit {
   }
 
   createTour(): void {
-    if (!this.tourData.name || !this.tourData.description || !this.tourData.difficulty) {
-      alert('Please fill all required fields');
+    if (!this.tourData.name || !this.tourData.description || !this.tourData.difficulty || this.tourData.price < 0) {
+      alert('Please fill all required fields and ensure price is not negative');
       return;
     }
 

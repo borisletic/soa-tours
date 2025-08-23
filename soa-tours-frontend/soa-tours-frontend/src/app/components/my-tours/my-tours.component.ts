@@ -338,7 +338,7 @@ export class MyToursComponent implements OnInit {
   }
 
   editTour(tour: Tour): void {
-    // Navigate to edit tour page (to be implemented)
+    // Navigate to edit tour page
     this.router.navigate(['/edit-tour', tour.id]);
   }
 
