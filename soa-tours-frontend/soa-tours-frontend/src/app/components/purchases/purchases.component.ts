@@ -262,7 +262,10 @@ export class PurchasesComponent implements OnInit {
   }
 
   startTour(tourId: string): void {
-    this.router.navigate(['/tour-execution'], { queryParams: { tourId } });
+    // Make sure we're passing the tourId as query parameter
+    this.router.navigate(['/tour-execution'], { 
+      queryParams: { tourId: tourId }
+    });
   }
 
   browseTours(): void {
@@ -273,9 +276,20 @@ export class PurchasesComponent implements OnInit {
     this.router.navigate(['/cart']);
   }
 
-  formatDate(dateString: Date | string): string {
+  formatDate(dateString: Date | string | null | undefined): string {
     try {
+      // Handle null, undefined, or "Invalid Date" cases
+      if (!dateString || dateString === 'Invalid Date') {
+        return 'No expiration';
+      }
+      
       const date = new Date(dateString);
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return 'No expiration';
+      }
+      
       return date.toLocaleString('sr-RS', {
         year: 'numeric',
         month: '2-digit',
@@ -284,7 +298,7 @@ export class PurchasesComponent implements OnInit {
         minute: '2-digit'
       });
     } catch {
-      return 'Invalid date';
+      return 'No expiration';
     }
   }
 

@@ -492,7 +492,9 @@ export class ToursComponent implements OnInit {
   }
 
   startTour(tourId: string): void {
-    this.router.navigate(['/tour-execution'], { queryParams: { tourId } });
+    this.router.navigate(['/tour-execution'], { 
+      queryParams: { tourId: tourId } 
+    });
   }
 
   goToCart(): void {

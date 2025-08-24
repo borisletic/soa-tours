@@ -430,15 +430,99 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // PRVO - proveri da li već postoji aktivna tura
-    this.loadExistingActiveTour();
-    
-    // DRUGO - čita tourId iz query parametara
+    // Handle query parameters first
     this.route.queryParams.subscribe(params => {
       if (params['tourId']) {
         this.tourId = params['tourId'];
-        // Ne pozivaj startTour ovdje jer možda već postoji aktivna tura
+        console.log('Tour ID from query params:', this.tourId);
+        
+        // Load tour details immediately
         this.loadTourDetails();
+        
+        // Check if there's already an active tour for this ID
+        this.checkForExistingActiveTour();
+      } else {
+        // No tourId provided, check for any active tour
+        console.log('No tourId in query params, checking for active tours');
+        this.checkForAnyActiveTour();
+      }
+    });
+  }
+
+  private checkForAnyActiveTour(): void {
+    this.apiService.getUserExecutions().subscribe({
+      next: (response) => {
+        const executions = response?.executions || [];
+        const activeTour = executions.find(exec => exec.status === 'active');
+        
+        if (activeTour) {
+          console.log('Found active tour, updating URL:', activeTour);
+          this.tourId = activeTour.tour_id;
+          
+          // Update the URL to include the tourId
+          this.router.navigate([], {
+            relativeTo: this.route,
+            queryParams: { tourId: this.tourId },
+            queryParamsHandling: 'merge'
+          });
+          
+          this.execution.set(activeTour);
+          this.loadTourDetails();
+          this.startAutoCheck();
+          
+          // Set current position if available
+          if (activeTour.current_position) {
+            this.currentPosition.set({
+              user_id: activeTour.user_id,
+              latitude: activeTour.current_position.latitude,
+              longitude: activeTour.current_position.longitude,
+              timestamp: new Date(activeTour.current_position.timestamp),
+              accuracy: 10
+            });
+          }
+        } else {
+          this.error.set('No active tour found. Please start a tour first.');
+        }
+      },
+      error: () => {
+        this.error.set('No active tour found. Please start a tour first.');
+      }
+    });
+  }
+
+  private checkForExistingActiveTour(): void {
+    this.apiService.getUserExecutions().subscribe({
+      next: (response) => {
+        const executions = response?.executions || [];
+        const activeTour = executions.find(exec => 
+          exec.status === 'active' && exec.tour_id === this.tourId
+        );
+        
+        if (activeTour) {
+          // Found existing active tour
+          console.log('Found existing active tour:', activeTour);
+          this.execution.set(activeTour);
+          this.startAutoCheck();
+          
+          // Set current position if available
+          if (activeTour.current_position) {
+            this.currentPosition.set({
+              user_id: activeTour.user_id,
+              latitude: activeTour.current_position.latitude,
+              longitude: activeTour.current_position.longitude,
+              timestamp: new Date(activeTour.current_position.timestamp),
+              accuracy: 10
+            });
+          }
+        } else {
+          // No active tour found, start a new one
+          console.log('No active tour found, starting new tour');
+          this.startTour();
+        }
+      },
+      error: () => {
+        console.log('No executions found, starting new tour');
+        this.startTour();
       }
     });
   }
@@ -486,20 +570,39 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
 
     this.loading.set(true);
     
-    // DODAJ OVO - učitaj tour details
-    this.loadTourDetails();
-    
     this.apiService.startTour(this.tourId).subscribe({
       next: (response: any) => {
         this.loading.set(false);
+        console.log('Tour start response:', response);
+        
         if (response.tour_execution) {
           this.execution.set(response.tour_execution);
           this.startAutoCheck();
+          
+          // Set current position from execution
+          if (response.tour_execution.current_position) {
+            this.currentPosition.set({
+              user_id: response.tour_execution.user_id,
+              latitude: response.tour_execution.current_position.latitude,
+              longitude: response.tour_execution.current_position.longitude,
+              timestamp: new Date(response.tour_execution.current_position.timestamp),
+              accuracy: 10
+            });
+          }
         }
       },
       error: (error) => {
         this.loading.set(false);
-        this.error.set(error.error?.error || 'Failed to start tour.');
+        const errorMsg = error.error?.error || 'Failed to start tour';
+        this.error.set(errorMsg);
+        console.error('Failed to start tour:', error);
+        
+        // If error mentions position simulator, provide helpful guidance
+        if (errorMsg.includes('Position Simulator')) {
+          if (confirm('You need to set your position first. Go to Position Simulator?')) {
+            this.goToPositionSimulator();
+          }
+        }
       }
     });
   }
@@ -714,7 +817,13 @@ export class TourExecutionComponent implements OnInit, OnDestroy {
 
   // Navigation methods
   goToPositionSimulator(): void {
-    this.router.navigate(['/position-simulator']);
+    // Navigate to position simulator and preserve the tour context
+    this.router.navigate(['/position-simulator'], { 
+      queryParams: { 
+        returnTo: '/tour-execution',
+        tourId: this.tourId 
+      } 
+    });
   }
 
   goToTours(): void {

@@ -707,8 +707,13 @@ removeKeypoint(tourId: string, order: number, userId?: number): Observable<any> 
     return this.http.get<PositionResponse>(`${this.CONTENT_API}/positions/${userId}`, this.httpOptions);
   }
 
-  updatePosition(userId: number, positionData: PositionData): Observable<PositionResponse> {
-    return this.http.post<PositionResponse>(`${this.CONTENT_API}/positions/${userId}`, positionData, this.httpOptions);
+  updatePosition(positionData: PositionData): Observable<any> {
+    const currentUserId = this.getCurrentUserId();
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'X-User-ID': currentUserId.toString()
+    });
+    return this.http.post<any>(`${this.CONTENT_API}/positions/${currentUserId}`, positionData, { headers });
   }
 
   clearPosition(userId: number): Observable<PositionResponse> {
@@ -791,16 +796,12 @@ removeKeypoint(tourId: string, order: number, userId?: number): Observable<any> 
     );
   }
 
-  getUserExecutions(): Observable<{executions: TourExecution[], count: number}> {
-    const currentUserId = this.getCurrentUserId();
+  getUserExecutions(userId?: number): Observable<{executions: TourExecution[]}> {
+    const currentUserId = userId || this.getCurrentUserId();
     const headers = new HttpHeaders({
       'X-User-ID': currentUserId.toString()
     });
-    
-    return this.http.get<{executions: TourExecution[], count: number}>(
-      `${this.CONTENT_API}/tours/executions`, 
-      { headers }
-    );
+    return this.http.get<{executions: TourExecution[]}>(`${this.CONTENT_API}/tours/executions`, { headers });
   }
 
   // Dodajte ove metode u src/app/services/api.service.ts:
@@ -899,4 +900,6 @@ checkTourPurchase(tourId: string, userId?: number): Observable<TourPurchaseInfo>
   });
   return this.http.get<TourPurchaseInfo>(`${this.COMMERCE_API}/purchase/check/${tourId}`, { headers });
 }
+
+
 }

@@ -558,26 +558,13 @@ export class TourDetailComponent implements OnInit {
     const tour = this.tour();
     if (!tour) return;
 
-    // Provera da li je tura kupljena (kada se uvede kupovina)
-    const purchased = this.purchaseStatus();
-    if (!purchased?.is_purchased && tour.status === 'published') {
-      alert('You need to purchase this tour before starting it. Please add it to cart and checkout.');
-      return;
-    }
-
-    // Provera da li je tura objavljena ili arhivirana
-    if (tour.status !== 'published' && tour.status !== 'archived') {
-      alert('This tour is not available for execution.');
-      return;
-    }
-
     this.startingTour.set(true);
     
     this.apiService.startTour(tour.id).subscribe({
       next: (response) => {
         this.startingTour.set(false);
         
-        // Navigacija na tour execution komponentu
+        // Navigate with the correct tourId
         this.router.navigate(['/tour-execution'], { 
           queryParams: { tourId: tour.id } 
         });
@@ -590,15 +577,16 @@ export class TourDetailComponent implements OnInit {
           errorMessage = error.error.error;
         }
         
-        // Pokazati specifične greške
         if (errorMessage.includes('Position Simulator')) {
           if (confirm(errorMessage + '\n\nWould you like to go to Position Simulator now?')) {
             this.router.navigate(['/position-simulator']);
           }
         } else if (errorMessage.includes('active tour')) {
           if (confirm(errorMessage + '\n\nWould you like to check your active tour?')) {
-            // Navigacija na aktivnu turu - možemo dodati rutu za to
-            this.router.navigate(['/my-tours']);
+            // Navigate to tour execution with the correct tourId
+            this.router.navigate(['/tour-execution'], { 
+              queryParams: { tourId: tour.id } 
+            });
           }
         } else {
           alert(errorMessage);

@@ -1,6 +1,6 @@
 import { Component, OnInit, signal, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterModule } from '@angular/router';
+import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import * as L from 'leaflet';
 
@@ -153,7 +153,7 @@ interface Position {
                             
                             <button 
                               class="btn btn-outline-primary"
-                              routerLink="/tour-execution">
+                              (click)="goToActiveTour()">
                               <i class="fas fa-eye me-2"></i>
                               View Active Tour
                             </button>
@@ -327,6 +327,8 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
   // Default coordinates for Belgrade, Serbia
   private defaultLat = 44.8176;
   private defaultLng = 20.4633;
+  private returnPath?: string;
+  private returnTourId?: string;
 
   // Mock koordinate - dodaj još lokacija
   mockLocations = [
@@ -344,12 +346,27 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
 
   constructor(
     private apiService: ApiService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
     this.loadCurrentPosition();
     this.checkActiveTour();
+    
+    // Handle return navigation
+    this.route.queryParams.subscribe(params => {
+      if (params['returnTo'] && params['tourId']) {
+        this.returnPath = params['returnTo'];
+        this.returnTourId = params['tourId'];
+        console.log('Will return to:', this.returnPath, 'with tour:', this.returnTourId);
+      }
+    });
+
+    // Check for active tour every 30 seconds
+    setInterval(() => {
+      this.checkActiveTour();
+    }, 30000);
   }
 
   ngAfterViewInit(): void {
@@ -430,7 +447,7 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
       accuracy: 10
     };
 
-    this.updatePosition(positionData);
+    this.updatePosition(positionData); // Now calls the corrected updatePosition
   }
 
   // NOVA METODA: Quick action za test scenarije
@@ -515,14 +532,60 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
   }
 
   // AŽURIRANA metoda updatePosition da pozove i setPosition
-  private updatePosition(positionData: any): void {
-    this.setPosition(positionData.latitude, positionData.longitude);
+  updatePosition(positionData: any): void {
+    this.loading.set(true);
+    this.loadingMessage.set('Updating position...');
+
+    this.apiService.updatePosition(positionData).subscribe({
+      next: (response) => {
+        this.currentPosition.set(response.position);
+        this.loading.set(false);
+        this.loadingMessage.set('');
+        
+        console.log('Position updated successfully');
+        
+        // Update the map marker
+        this.addPositionMarker(response.position.latitude, response.position.longitude);
+        
+        // Check nearby keypoints after position update
+        if (this.activeTour()) {
+          this.loadTourKeypoints(this.activeTour()!.tour_id);
+        }
+        
+        // If we came from tour execution, offer to return
+        if (this.returnPath && this.returnTourId) {
+          if (confirm('Position updated! Return to your active tour?')) {
+            this.router.navigate([this.returnPath], {
+              queryParams: { tourId: this.returnTourId }
+            });
+          }
+        }
+      },
+      error: (error) => {
+        this.loading.set(false);
+        this.loadingMessage.set('');
+        this.error.set(error.error?.error || 'Failed to update position');
+      }
+    });
   }
 
   // Postojeće metode ostaju iste...
   
   private initializeMap(): void {
+    // Prevent multiple initialization
+    if (this.map) {
+      console.log('Map already initialized');
+      return;
+    }
+
     try {
+      // Check if the map container exists
+      const mapContainer = document.getElementById('position-map');
+      if (!mapContainer) {
+        console.warn('Map container not found yet');
+        return;
+      }
+
       // Initialize map centered on Belgrade or user's last position
       const position = this.currentPosition();
       const lat = position ? position.latitude : this.defaultLat;
@@ -548,6 +611,8 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
 
       // Fix for Leaflet marker icons in Angular
       this.fixLeafletIcons();
+
+      console.log('Map initialized successfully');
 
     } catch (error) {
       console.error('Error initializing map:', error);
@@ -617,7 +682,8 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
       accuracy: 10.0
     };
 
-    this.apiService.updatePosition(user.id, positionData).subscribe({
+    // Fix: Remove user.id parameter since API service handles it internally
+    this.apiService.updatePosition(positionData).subscribe({
       next: (response: any) => {
         this.currentPosition.set({
           user_id: user.id,
@@ -637,6 +703,7 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
       },
       error: (error) => {
         console.error('Error saving position:', error);
+        this.error.set('Failed to save position');
       }
     });
   }
@@ -727,6 +794,17 @@ export class PositionSimulatorComponent implements OnInit, AfterViewInit {
       });
     } catch {
       return 'Invalid date';
+    }
+  }
+
+  goToActiveTour(): void {
+    const tour = this.activeTour();
+    if (tour) {
+      this.router.navigate(['/tour-execution'], { 
+        queryParams: { tourId: tour.tour_id } 
+      });
+    } else {
+      this.router.navigate(['/tour-execution']);
     }
   }
 

@@ -134,14 +134,16 @@ func (h *TourHandler) checkTourPurchase(userID int, tourID string) bool {
 // GET /tours/:id - get tour by ID
 func (h *TourHandler) GetTourByID(c *gin.Context) {
     idStr := c.Param("id")
+    userIDStr := c.GetHeader("X-User-ID")
+    
     objectID, err := primitive.ObjectIDFromHex(idStr)
     if err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tour ID"})
         return
     }
 
-    collection := h.DB.Collection("tours")
     var tour models.Tour
+    collection := h.DB.Collection("tours")
     err = collection.FindOne(context.TODO(), bson.M{"_id": objectID}).Decode(&tour)
     if err != nil {
         if err == mongo.ErrNoDocuments {
@@ -152,16 +154,22 @@ func (h *TourHandler) GetTourByID(c *gin.Context) {
         return
     }
 
-    // Check if user has purchased this tour (only if X-User-ID is provided)
-    userIDStr := c.GetHeader("X-User-ID")
-    if userIDStr != "" && tour.Status == "published" {
-        userID, err := strconv.Atoi(userIDStr)
-        if err == nil {
-            hasPurchased := h.checkTourPurchase(userID, tour.ID.Hex())
+    // Only limit keypoints for non-authors on published tours
+    if userIDStr != "" {
+        userID, _ := strconv.Atoi(userIDStr)
+        
+        // If user is the author, always show all keypoints
+        if tour.AuthorID == userID {
+            c.JSON(http.StatusOK, gin.H{"tour": tour})
+            return
+        }
+        
+        // For published tours, check if user has purchased
+        if tour.Status == "published" {
+            hasPurchased := false  // Check purchase status here
             
-            // If not purchased, limit the keypoints to only the first one
             if !hasPurchased && len(tour.Keypoints) > 0 {
-                tour.Keypoints = tour.Keypoints[:1] // Only show first keypoint
+                tour.Keypoints = tour.Keypoints[:1]
             }
         }
     } else if tour.Status == "published" {
@@ -316,7 +324,7 @@ func (h *TourHandler) UpdateTour(c *gin.Context) {
     if req.Difficulty != "" {
         updateDoc["difficulty"] = req.Difficulty
     }
-    if req.Price >= 0 {
+    if req.Price > 0 {
         updateDoc["price"] = req.Price
     }
     if req.DistanceKm >= 0 {
